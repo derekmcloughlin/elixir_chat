@@ -28,28 +28,71 @@ The mailbox is a plain old Erlang process (not a gen_server).
 
 ```elixir
 def loop(state) do
-receive do
-  {:add_listener, listener = {_msg_id, _pid}} ->
-    new_state = state.update_listeners(fn(old_listeners) -> [listener | old_listeners] end)
-    new_state = notify_listeners(new_state)
-    loop(new_state)
-  {:remove_listener, pid} ->
-    new_listeners = Enum.filter(state.listeners, fn({_id, p}) -> p != pid end)
-    new_state = state.update_listeners(fn(old_listeners) -> new_listeners end)
-    loop(new_state)
-  {:get_state} ->
-    IO.puts "State: #{inspect(state)}"
-    loop(state)
-  {:get_msg_id, pid} ->
-    pid <- {:cur_msg_id, state.cur_id}
-    loop(state)
-  {:msg, data} ->
-    msg = Message.new id: state.cur_id, data: data
-    new_state = state.update_messages(fn(old_messages) -> [msg | old_messages] end)
-    new_state = state.update_cur_id(fn(old_cur_id) -> old_cur_id + 1 end)
-    new_state = notify_listeners(new_state)
-    loop(new_state)
+  receive do
+    {:add_listener, listener = {_msg_id, _pid}} ->
+      new_state = state.update_listeners(fn(old_listeners) -> [listener | old_listeners] end)
+      new_state = notify_listeners(new_state)
+      loop(new_state)
+    {:remove_listener, pid} ->
+      new_listeners = Enum.filter(state.listeners, fn({_id, p}) -> p != pid end)
+      new_state = state.update_listeners(fn(_old_listeners) -> new_listeners end)
+      loop(new_state)
+    {:get_state} ->
+      IO.puts "State: #{inspect(state)}"
+      loop(state)
+    {:get_msg_id, pid} ->
+      pid <- {:cur_msg_id, state.cur_id}
+      loop(state)
+    {:msg, data} ->
+      msg = Message.new id: state.cur_id, data: data
+      new_state = state.update_messages(fn(old_messages) -> [msg | old_messages] end)
+      new_state = new_state.update_cur_id(fn(old_cur_id) -> old_cur_id + 1 end)
+      new_state = notify_listeners(new_state)
+      loop(new_state)
+  end
 end
+```
+
+I've added in an extra message to print out the state - it's useful for debugging.
+
+Also, compared to Chris' original code, I'm not using proc:hibernate yet.
+
+Listeners are notififed when a new listener is added and when a new message comes in:
+
+```elixir
+def notify_listeners(state) do
+  new_listeners = Enum.filter(state.listeners, 
+    fn({msg_id, pid}) ->
+      case msg_id >= state.cur_id do
+          true -> 
+            true
+          _ ->
+            # Select messages that are greater than or equal to the requested ID
+            case Enum.filter(state.messages, fn(msg) -> msg.id >= msg_id end) do
+                [] -> 
+                  true # no messages were found for this listener, keep it in the list
+                m -> 
+                  messages_to_send = Enum.map(m, fn(msg) -> {msg.id, msg.data} end) 
+                  pid <- messages_to_send
+                  false # remove it
+            end
+      end
+    end)
+  state.update_listeners(fn(_old_listeners) -> new_listeners end)
 end
+```
+
+Note that as soon as a listener has been notified of the list of messages it is 
+removed from the list of listeners. This seems a bit odd until you look at the 
+web code, in particular the AJAX call `getServiceMsg` in client.js. It issues a request
+for the `/chat/wait/?msg_id=` page, and when it gets a reply, it handles it and then 
+calls itself again recursively. 
+
+A helper function kicks it off:
+
+```elixir
+  def start(id) do
+    loop(id)
+  end
 ```
 

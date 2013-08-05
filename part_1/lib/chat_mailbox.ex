@@ -14,7 +14,7 @@ defmodule ChatMailbox do
 
       {:remove_listener, pid} ->
         new_listeners = Enum.filter(state.listeners, fn({_id, p}) -> p != pid end)
-        new_state = state.update_listeners(fn(old_listeners) -> new_listeners end)
+        new_state = state.update_listeners(fn(_old_listeners) -> new_listeners end)
         loop(new_state)
 
       {:get_state} ->
@@ -28,7 +28,7 @@ defmodule ChatMailbox do
       {:msg, data} ->
         msg = Message.new id: state.cur_id, data: data
         new_state = state.update_messages(fn(old_messages) -> [msg | old_messages] end)
-        new_state = state.update_cur_id(fn(old_cur_id) -> old_cur_id + 1 end)
+        new_state = new_state.update_cur_id(fn(old_cur_id) -> old_cur_id + 1 end)
         new_state = notify_listeners(new_state)
         loop(new_state)
     end
@@ -53,7 +53,7 @@ defmodule ChatMailbox do
               end
         end
       end)
-    new_state = state.update_listeners(fn(old_listeners) -> new_listeners end)
+    state.update_listeners(fn(_old_listeners) -> new_listeners end)
   end
 
   def start(id) do
