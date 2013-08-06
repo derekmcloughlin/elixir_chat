@@ -16,6 +16,14 @@ defmodule ChatPostOffice do
     :gen_server.call :postoffice, {:create_mailbox, id}
   end
 
+  def delete_mailbox(id) do
+    :gen_server.cast :postoffice, {:delete_mailbox, id}
+  end
+
+  def send_mail(id, message) do
+    :gen_server.cast(:postoffice, {:send_mail, {id, message}})
+  end
+
   def get_mailbox(mailbox_id, state) do
     case Enum.filter(state.mailboxes, fn({id, _}) -> id == mailbox_id end) do
         [] -> 
@@ -36,4 +44,30 @@ defmodule ChatPostOffice do
     end
   end
 
+  def handle_cast({:delete_mailbox, mailbox_id}, state) do
+    #state{mailboxes=MBoxes} = State) ->
+    new_boxes = Enum.filter(state.mailboxes, fn({id, pid}) ->
+        case id != mailbox_id do
+            false -> 
+              # tell the mailbox process to quit
+              pid <- :quit
+              false
+            _ -> 
+              true
+        end
+    end)
+    {:noreply, State.new mailboxes: new_boxes}
+  end
+
+  def handle_cast({:send_mail, {id, message}}, state) do
+    case get_mailbox(id, state) do
+      {:ok, {_id, pid}} -> 
+        pid <- {:mail, message}
+      _ -> 
+        :ok
+    end
+    {:noreply, state}
+  end
+
 end
+

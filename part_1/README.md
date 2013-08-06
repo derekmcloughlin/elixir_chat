@@ -213,16 +213,76 @@ end
 We handle the call for the `create_mailbox` API thus:
 
 ```elixir
-  def handle_call({:create_mailbox, id}, _from, state) do
-    case get_mailbox(id, state) do
-        {:ok, _} -> 
-          {:reply, {:error, :already_exists}, state}
-        {:error, :notfound} ->
-          pid = spawn_link(ChatMailbox, :start, [id])
-          new_mailbox = {id, pid}
-          {:reply, :ok, State.new mailboxes: [new_mailbox | state.mailboxes]}
-    end
+def handle_call({:create_mailbox, id}, _from, state) do
+  case get_mailbox(id, state) do
+      {:ok, _} -> 
+        {:reply, {:error, :already_exists}, state}
+      {:error, :notfound} ->
+        pid = spawn_link(ChatMailbox, :start, [id])
+        new_mailbox = {id, pid}
+        {:reply, :ok, State.new mailboxes: [new_mailbox | state.mailboxes]}
   end
+end
+```
+
+
+Testing the PostOffice
+----------------------
+
+We can make a test to see if creating duplicate mailboxes gives an error:
+
+```elixir
+test "Create a mailbox" do
+  ChatPostOffice.start_link()
+  :ok = ChatPostOffice.create_mailbox(42)
+  # Try creating it again
+  {:error, :already_exists} = ChatPostOffice.create_mailbox(42)
+  assert(true)
+end
+```
+
+More PostOffice Functionality
+-----------------------------
+
+Deleting a mailbox is done using a `:gen_server.cast` instead of a `:gen_server.call`.
+
+```elixir
+def delete_mailbox(id) do
+  :gen_server.cast :postoffice, {:delete_mailbox, id}
+end
+
+def handle_cast({:delete_mailbox, mailbox_id}, state) do
+  #state{mailboxes=MBoxes} = State) ->
+  new_boxes = Enum.filter(state.mailboxes, fn({id, pid}) ->
+      case id != mailbox_id do
+          false -> 
+            # tell the mailbox process to quit
+            pid <- :quit
+            false
+          _ -> 
+            true
+      end
+  end)
+  {:noreply, State.new mailboxes: new_boxes}
+end
+```
+
+Sending mail is also done using a cast:
+
+```elixir
+def send_mail(id, message) do
+  :gen_server.cast(:postoffice, {:send_mail, {id, message}})
+end
+
+def handle_cast({:send_mail, {id, message}}, state) do
+  case get_mailbox(id, state) do
+    {:ok, {_id, pid}} -> 
+      pid <- {:mail, message}
+    _ -> 
+      :ok
+  end
+  {:noreply, state}
+end
 ```
 
 
