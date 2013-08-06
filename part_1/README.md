@@ -164,6 +164,65 @@ However, use can also add some unit tests. In the file `chat_tutorial_test.exs`:
 The PostOffice
 --------------
 
+The post office manages multiple mailboxes, including their creation and
+destruction, and the sending of messages to the mailboxes, either indiviually
+or broadcast to all. 
 
+The ChatPostOffice module is a gen_server. Its state is kept as an array
+of mailboxes, each of which is a tuple containin the ID and a pid.
+
+```elixir
+defmodule ChatPostOffice do
+
+  use GenServer.Behaviour
+
+  defrecord State, mailboxes: []
+
+  def init(_args) do
+    {:ok, State.new}
+  end
+
+  ...
+```
+
+The initial API to the server has `start_link` and `create_mailbox` functions:
+
+```elixir
+  def start_link() do
+    :gen_server.start_link {:local, :postoffice}, ChatPostOffice, [], []
+  end
+
+  def create_mailbox(id) do
+    :gen_server.call :postoffice, {:create_mailbox, id}
+  end
+```
+
+When creating a mailbox we need to check if one exists already:
+
+```elixir
+def get_mailbox(mailbox_id, state) do
+  case Enum.filter(state.mailboxes, fn({id, _}) -> id == mailbox_id end) do
+      [] -> 
+        {:error, :notfound}
+      [m|_] -> 
+        {:ok, m}
+  end
+end
+```
+
+We handle the call for the `create_mailbox` API thus:
+
+```elixir
+  def handle_call({:create_mailbox, id}, _from, state) do
+    case get_mailbox(id, state) do
+        {:ok, _} -> 
+          {:reply, {:error, :already_exists}, state}
+        {:error, :notfound} ->
+          pid = spawn_link(ChatMailbox, :start, [id])
+          new_mailbox = {id, pid}
+          {:reply, :ok, State.new mailboxes: [new_mailbox | state.mailboxes]}
+    end
+  end
+```
 
 

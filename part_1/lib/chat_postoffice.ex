@@ -5,7 +5,15 @@ defmodule ChatPostOffice do
   defrecord State, mailboxes: []
 
   def init(_args) do
-	{:ok, State.new}
+    {:ok, State.new}
+  end
+
+  def start_link() do
+    :gen_server.start_link {:local, :postoffice}, ChatPostOffice, [], []
+  end
+
+  def create_mailbox(id) do
+    :gen_server.call :postoffice, {:create_mailbox, id}
   end
 
   def get_mailbox(mailbox_id, state) do
