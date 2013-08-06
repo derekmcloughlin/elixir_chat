@@ -4,8 +4,36 @@ This is an Elixir Chat Server based on Chris Moos's
 [Building an Erlang Chat Server with Comet](http://www.chrismoos.com/2009/09/28/building-an-erlang-chat-server-with-comet-part-1)
 the source of which can be found on [Github](https://github.com/chrismoos/erl_chat_tutorial).
 
+Creating the project
+--------------------
+
+You can create a new project using mix:
+
+```sh
+> mix new elixir_chat
+* creating README.md
+* creating .gitignore
+* creating mix.exs
+* creating lib
+* creating lib/elixir_chat.ex
+* creating test
+* creating test/test_helper.exs
+* creating test/elixir_chat_test.exs
+
+Your mix project was created with success.
+You can use mix to compile it, test it, and more:
+
+    cd elixir_chat
+    mix compile
+    mix test
+
+Run `mix help` for more information.
+```
+
+Note that in the code on github I changed things around a bit to split the tutorial into part_1, part_2 etc.
+
 The MailBox
-===========
+-----------
 
 Each connected user has a mailbox that stores messages and notifies listeners of new messages.
 
@@ -91,8 +119,26 @@ calls itself again recursively.
 A helper function kicks it off:
 
 ```elixir
-  def start(id) do
-    loop(id)
-  end
+def start(id) do
+  loop(id)
+end
+```
+
+Testing the Mailbox
+-------------------
+
+```elixir
+~/proj/elixir/elixir_chat/part_1(master)$ iex -S mix
+iex(1)> p = spawn(ChatMailbox, :start, [1])
+#PID<0.51.0>
+iex(2)> p <- {:get_state}
+{:get_state}
+State: ChatMailbox.State[id: 1, cur_id: 0, listeners: [], messages: []]
+iex(3)> p <- {:add_listener, {0, self}}
+{:add_listener, {0, #PID<0.26.0>}}
+iex(4)> p <- {:get_state}
+{:get_state}
+State: ChatMailbox.State[id: 1, cur_id: 0, listeners: [{0, #PID<0.26.0>}], messages: []]
+iex(5)>
 ```
 

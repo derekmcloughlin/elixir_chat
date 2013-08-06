@@ -7,6 +7,7 @@ defmodule ChatMailbox do
   def loop(state) do
 
     receive do
+      
       {:add_listener, listener = {_msg_id, _pid}} ->
         new_state = state.update_listeners(fn(old_listeners) -> [listener | old_listeners] end)
         new_state = notify_listeners(new_state)
@@ -59,7 +60,7 @@ defmodule ChatMailbox do
   def start(id) do
     #:proc_lib.hibernate(__ENV__.module, :loop, [State.new id: id])
     #spawn(__ENV__.module, :loop, [State.new id: id])
-    loop(id)
+    loop(State.new id: id)
   end
 
 end
