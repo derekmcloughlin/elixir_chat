@@ -127,6 +127,8 @@ end
 Testing the Mailbox
 -------------------
 
+We can do some ad-hoc manual tests of the Mailbox: 
+
 ```elixir
 ~/proj/elixir/elixir_chat/part_1(master)$ iex -S mix
 iex(1)> p = spawn(ChatMailbox, :start, [1])
@@ -141,4 +143,27 @@ iex(4)> p <- {:get_state}
 State: ChatMailbox.State[id: 1, cur_id: 0, listeners: [{0, #PID<0.26.0>}], messages: []]
 iex(5)>
 ```
+
+However, use can also add some unit tests. In the file `chat_tutorial_test.exs`:
+
+```elixir
+  test "Sending a message to a mailbox" do
+    p = spawn(ChatMailbox, :start, [0])
+    p <- {:add_listener, {0, self}}
+    p <- {:msg, "Hello world"}
+    receive do
+      m when is_list(m) ->
+        [{id, message} | _ ] = m
+        assert(message == "Hello world")
+      _ -> 
+        assert(false)
+    end
+  end
+```
+
+The PostOffice
+--------------
+
+
+
 
