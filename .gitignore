@@ -5,3 +5,4 @@ erl_crash.dump
 *.beam
 .*.un~
 .compile.elixir
+/part_1/ebin
