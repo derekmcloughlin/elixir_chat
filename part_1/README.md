@@ -267,6 +267,19 @@ def handle_cast({:delete_mailbox, mailbox_id}, state) do
 end
 ```
 
+The corresponding test is:
+```elixir
+test "Delete a mailbox" do
+  ChatPostOffice.start_link()
+  :ok = ChatPostOffice.create_mailbox 43
+  # Delete it
+  ChatPostOffice.delete_mailbox 43
+  # Delete it again - doesn't cause an error
+  ChatPostOffice.delete_mailbox 43
+  assert(true)
+end
+```
+
 Sending mail is also done using a cast:
 
 ```elixir
@@ -284,5 +297,61 @@ def handle_cast({:send_mail, {id, message}}, state) do
   {:noreply, state}
 end
 ```
+
+The `send_mail` function in the post office is used in the chat room as a 
+way of the room sending messages to the mailbox. The `message` isn't just a 
+string - it's meant to be a tuple of {command, command_data}, and the 
+command_data itself will be made up of other tuples with commands such 
+as leave_room, join_room etc.
+
+Here's a short test:
+
+```elixir
+test "Send some mail" do
+  ChatPostOffice.start_link()
+  :ok = ChatPostOffice.create_mailbox 44
+  :ok = ChatPostOffice.send_mail 44, {:add_listener, {0, self}}
+  :ok = ChatPostOffice.send_mail 44, {:msg, "Hello world"}
+  receive do
+    m when is_list m ->
+      [{id, message} | _ ] = m
+      assert(message == "Hello world")
+    _ -> 
+      assert false
+  end
+  :ok = ChatPostOffice.send_mail 44, {:remove_listener, self}
+  assert(true)
+end
+```
+
+Broadcasting a mail sends a message to all mailboxes in the post office:
+
+```elixir
+def broadcast_mail(message, except) do 
+  :gen_server.cast(:postoffice, {:broadcast_mail, {message, except}})
+end
+
+def handle_cast({:broadcast_mail, {message, except}}, state) when is_list except do
+  lc {id, pid} inlist state.mailboxes, Enum.member?(except, id) == false, do: pid <- message
+  {:noreply, state};
+end
+```
+
+However, I don't like the use of list comprehensions used in the original
+Erlang code to perform an action on each member of the list of mailboxes. That
+list is then discarded.
+
+A more Elixir-like way to do this might look list this:
+
+```elixir
+def handle_cast({:broadcast_mail, {message, except}}, state) when is_list except do
+  state.mailboxes 
+  |> Enum.filter fn({id, _}) -> Enum.member?(except, id) == false end
+  |> Enum.each fn({_, pid}) -> pid <- message end
+  {:noreply, state};
+end
+```
+
+Testing broadcast mails is a bit tricky.
 
 

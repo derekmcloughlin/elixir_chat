@@ -7,7 +7,7 @@ defmodule ChatTutorialTest do
     p <- {:msg, "Hello world"}
     receive do
       m when is_list m ->
-        [{id, message} | _ ] = m
+        [{_id, message} | _ ] = m
         assert(message == "Hello world")
       _ -> 
         assert false
@@ -33,7 +33,18 @@ defmodule ChatTutorialTest do
   end
 
   test "Send some mail" do
-
+    ChatPostOffice.start_link()
+    :ok = ChatPostOffice.create_mailbox 44
+    :ok = ChatPostOffice.send_mail 44, {:add_listener, {0, self}}
+    :ok = ChatPostOffice.send_mail 44, {:msg, "Hello world"}
+    receive do
+      m when is_list m ->
+        [{_id, message} | _ ] = m
+        assert(message == "Hello world")
+      _ -> 
+        assert false
+    end
+    :ok = ChatPostOffice.send_mail 44, {:remove_listener, self}
     assert(true)
   end
 end
