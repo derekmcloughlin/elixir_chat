@@ -354,4 +354,79 @@ end
 
 Testing broadcast mails is a bit tricky.
 
+The Chat Room
+-------------
+
+The (for now, global) chat room is also a gen_server:
+
+```elixir
+defmodule ChatRoom do
+
+  use GenServer.Behaviour
+
+  defrecord ClientState, id: 0, nick: nil, host: nil, last_action: nil
+
+  defrecord State, clients: []
+
+  def init(_args) do
+    {:ok, State.new}
+  end
+ 
+  def start_link() do
+    :gen_server.start_link({:local, :chatroom}, ChatRoom, [], [])
+  end
+
+end
+```
+
+The state is a list of clients defined by an id, a nickname, a hostname and 
+the datetime of the last action.
+
+The chat room allows users to join the room, leave the room, send a message, 
+and allows the web front end to get a list of users, and wait for messages.
+
+When joining a room we need to validate the nickname:
+
+```elixir
+defp validate_nick([], _) do
+  {:error, :bad_format}
+end
+
+defp validate_nick(nick, state) do
+  shortened = nick |> String.strip |> String.slice 0, 16 
+  case {Regex.run(%r/^([A-Za-z0-9]+)$/, shortened), Enum.filter(state.clients, fn(client) -> client.nick == shortened end)} do
+    {[shortened, shortened], []} -> {:ok, shortened}
+    {[shortened, shortened], _} -> {:error, :not_available}
+    {nil, []} -> {:error, :bad_format}
+     _ -> {:error, :not_available}
+  end
+end
+```
+
+We can test this validation:
+
+```elixir
+test "Validate a nickname" do
+  valid_nick = "granddad"
+
+  delboy = ChatRoom.ClientState.new nick: "delboy"
+  rodney = ChatRoom.ClientState.new nick: "rodney"
+
+  clients = [delboy, rodney]
+  state = ChatRoom.State.new clients: clients
+
+  # "grandad" is OK
+  {:ok, valid_nick} = ChatRoom.validate_nick valid_nick, state
+
+  # "delboy" is not available
+  {:error, :not_available} = ChatRoom.validate_nick "delboy", state
+
+  # Neither is "rodney"
+  {:error, :not_available} = ChatRoom.validate_nick "rodney", state
+
+  # "D@ve" is invalid
+  {:error, :bad_format} = ChatRoom.validate_nick "D@ve", state
+
+end
+```
 

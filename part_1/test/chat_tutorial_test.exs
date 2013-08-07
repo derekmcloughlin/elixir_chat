@@ -47,4 +47,27 @@ defmodule ChatTutorialTest do
     :ok = ChatPostOffice.send_mail 44, {:remove_listener, self}
     assert(true)
   end
+
+  test "Validate a nickname" do
+    valid_nick = "granddad"
+
+    delboy = ChatRoom.ClientState.new nick: "delboy"
+    rodney = ChatRoom.ClientState.new nick: "rodney"
+
+    clients = [delboy, rodney]
+    state = ChatRoom.State.new clients: clients
+
+    # "grandad" is OK
+    {:ok, valid_nick} = ChatRoom.validate_nick valid_nick, state
+
+    # "delboy" is not available
+    {:error, :not_available} = ChatRoom.validate_nick "delboy", state
+
+    # Neither is "rodney"
+    {:error, :not_available} = ChatRoom.validate_nick "rodney", state
+
+    # "D@ve" is invalid
+    {:error, :bad_format} = ChatRoom.validate_nick "D@ve", state
+
+  end
 end
