@@ -16,5 +16,13 @@ defmodule ChatUtil do
     List.flatten(lc x inlist :erlang.binary_to_list(bin), do: :io_lib.format("~2.16.0B", [x]))
   end
 
+  def unicode_clean(str) do
+    case catch :rfc4627.unicode_decode(:erlang.list_to_binary(str)) do
+        {'EXIT', _Reason} -> :erlang.list_to_binary(strip_unicode(str, []))
+        {'utf-8', _M} -> :erlang.list_to_binary(str)
+        _ -> <<>>
+    end
+  end
+
 end
 

@@ -506,3 +506,31 @@ end
 
 Note that I have to start both gen_servers manually. For normal operations, this is the 
 responsibility of the supervisor - see later.
+
+Leaving a room is a gen_server cast:
+
+```elixir
+def leave(session, reason) do
+  :gen_server.cast :chatroom, {:leave, {session, reason}}
+end
+
+def handle_cast({:leave, {session, reason}}, state) do
+  case get_session(session, state) do
+    {:error, :not_found} -> 
+      {:noreply, state}
+    {:ok, client} ->
+      ChatPostOffice.delete_mailbox client.id
+      clean_reason =  reason |> String.slice 0, 32 
+      ChatPostOffice.broadcast_mail {:msg, {:user_left_room, {client.nick, clean_reason}}}, [client.id]
+      other_clients = Enum.filter(state.clients, fn(c) -> c.id != client.id end)
+      {:noreply, State.new clients: other_clients}
+  end
+end
+```
+
+This works fine but it's difficult to unit-test. Genserver casts
+are asynchronous, so the only value you'll get back is :ok.
+
+
+
+

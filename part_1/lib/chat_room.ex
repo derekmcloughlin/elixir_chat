@@ -18,6 +18,10 @@ defmodule ChatRoom do
     :gen_server.call :chatroom, {:join, {nick, host}}, :infinity
   end
 
+  def leave(session, reason) do
+    :gen_server.cast :chatroom, {:leave, {session, reason}}
+  end
+
   def handle_call({:join, {nick, host}}, _from, state) do
     case validate_nick(nick, state) do
       {:error, reason} -> 
@@ -35,11 +39,31 @@ defmodule ChatRoom do
     end
   end
 
+  def handle_cast({:leave, {session, reason}}, state) do
+    case get_session(session, state) do
+      {:error, :not_found} -> 
+        {:noreply, state}
+      {:ok, client} ->
+        ChatPostOffice.delete_mailbox client.id
+        clean_reason =  reason |> String.slice 0, 32 
+        ChatPostOffice.broadcast_mail {:msg, {:user_left_room, {client.nick, clean_reason}}}, [client.id]
+        other_clients = Enum.filter(state.clients, fn(c) -> c.id != client.id end)
+        {:noreply, State.new clients: other_clients}
+    end
+  end
+
   def get_unique_session(state) do
     hash = ChatUtil.generate_hash
     case Enum.filter(state.clients, fn(client_state) -> client_state.id == hash end) do
       [] -> hash
       _ -> get_unique_session state
+    end
+  end
+
+  def get_session(session, state) do 
+    case Enum.filter(state.clients, fn(c) -> c.id == session end) do
+      [] -> {:error, :not_found}
+      [x|_] -> {:ok, x}
     end
   end
 

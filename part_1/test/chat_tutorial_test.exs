@@ -66,8 +66,6 @@ defmodule ChatTutorialTest do
 
 
   test "Validate a nickname" do
-    valid_nick = "granddad"
-
     delboy = ChatRoom.ClientState.new nick: "delboy"
     rodney = ChatRoom.ClientState.new nick: "rodney"
 
@@ -75,7 +73,7 @@ defmodule ChatTutorialTest do
     state = ChatRoom.State.new clients: clients
 
     # "grandad" is OK
-    {:ok, valid_nick} = ChatRoom.validate_nick valid_nick, state
+    {:ok, "granddad"} = ChatRoom.validate_nick "granddad", state
 
     # "delboy" is not available
     {:error, :not_available} = ChatRoom.validate_nick "delboy", state
@@ -93,6 +91,17 @@ defmodule ChatTutorialTest do
     {:ok, _session_id} = ChatRoom.join "delboy", "localhost"
     # You can't do it again
     {:error, :not_available} = ChatRoom.join "delboy", "localhost"
+  end
+
+  test "User Leaves Room" do
+    ChatPostOffice.start_link()
+    ChatRoom.start_link()
+    {:ok, session_id} = ChatRoom.join "rodney", "localhost"
+    :ok = ChatRoom.leave session_id, "Didn't like the language"
+    # Try it again with the same session id
+    :ok = ChatRoom.leave session_id, "Didn't like the language"
+    # Try with an invalid session id
+    :ok = ChatRoom.leave "invalid session", "Didn't like the language"
   end
 
 end
