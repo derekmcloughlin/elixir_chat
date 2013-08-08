@@ -75,9 +75,9 @@ defmodule ChatPostOffice do
 
   def handle_cast({:broadcast_mail, {message, except}}, state) when is_list except do
     state.mailboxes 
-    |> Enum.filter fn({id, _}) -> Enum.member?(except, id) == false end
-    |> Enum.each fn({_, pid}) -> pid <- message end
-    {:noreply, state};
+      |> Enum.filter(fn({id, _}) -> Enum.member?(except, id) == false end)
+      |> Enum.each(fn({_, pid}) -> pid <- message end)
+    {:noreply, state}
   end
 
 end

@@ -346,13 +346,40 @@ A more Elixir-like way to do this might look list this:
 ```elixir
 def handle_cast({:broadcast_mail, {message, except}}, state) when is_list except do
   state.mailboxes 
-  |> Enum.filter fn({id, _}) -> Enum.member?(except, id) == false end
-  |> Enum.each fn({_, pid}) -> pid <- message end
+  |> Enum.filter(fn({id, _}) -> Enum.member?(except, id) == false end)
+  |> Enum.each(fn({_, pid}) -> pid <- message end)
   {:noreply, state};
 end
 ```
 
-Testing broadcast mails is a bit tricky.
+NOTE: I originally didn't have parentheses for the Enum.filter and Enum.each calls:
+
+```elixir
+  |> Enum.filter fn({id, _}) -> Enum.member?(except, id) == false end
+  |> Enum.each fn({_, pid}) -> pid <- message end
+```
+
+It compiled, but gave run-time errors about `:badaridy`.
+
+We can test the broadcast:
+
+```elixir
+test "Broadcast some mail" do
+  ChatPostOffice.start_link()
+  :ok = ChatPostOffice.create_mailbox 45
+  :ok = ChatPostOffice.send_mail 45, {:add_listener, {0, self}}
+  :ok = ChatPostOffice.broadcast_mail {:msg, {:user_joined_room, "delboy"}}, []
+  receive do
+    m when is_list m ->
+      [{_message_id, {:user_joined_room, "delboy"}} | _] = m
+      assert true
+    _ -> 
+      assert false
+  end
+  :ok = ChatPostOffice.send_mail 45, {:remove_listener, self}
+  assert(true)
+end
+```
 
 The Chat Room
 -------------
@@ -430,3 +457,52 @@ test "Validate a nickname" do
 end
 ```
 
+The `join` function looks like this:
+
+```elixir
+def join(nick, host) do
+  :gen_server.call(:chatroom, {:join, {nick, host}}, :infinity)
+end
+
+def handle_call({:join, {nick, host}}, _from, state) when is_list nick do
+  case validate_nick(nick, state) do
+    {:error, reason} -> 
+      {:reply, {:error, reason}, state}
+    {:ok, valid_nick} ->
+      session = get_unique_session state
+      case ChatPostOffice.create_mailbox Session do
+        :ok -> 
+          ChatPostOffice.broadcast_mail({:msg, {:user_joined_room, valid_nick}}, [session])
+          new_client = ClientState.new id: session, nick: valid_nick, host: host, last_action: :erlang.now()
+          {:reply, {:ok, session}, State.new clients: [new_client | state.clients]}
+        {:error, _} -> 
+          {:reply, {:error, :not_available}, state}
+      end
+  end
+end
+
+def get_unique_session(state) do
+  hash = ChatUtil.generate_hash
+  case Enum.filter(state.clients, fn(client_state) -> client_state.id == hash end) do
+    [] -> hash
+    _ -> get_unique_session state
+  end
+end
+```
+
+There are a few utility functions in ChatUtil.ex that are used to generate SHA hashes.
+
+To test the room functionality:
+
+```elixir
+test "User Joins Room" do
+  ChatPostOffice.start_link()
+  ChatRoom.start_link()
+  {:ok, _session_id} = ChatRoom.join "delboy", "localhost"
+  # You can't do it again
+  {:error, :not_available} = ChatRoom.join "delboy", "localhost"
+end
+```
+
+Note that I have to start both gen_servers manually. For normal operations, this is the 
+responsibility of the supervisor - see later.

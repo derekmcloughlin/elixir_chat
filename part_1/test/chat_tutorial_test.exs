@@ -48,6 +48,23 @@ defmodule ChatTutorialTest do
     assert(true)
   end
 
+  test "Broadcast some mail" do
+    ChatPostOffice.start_link()
+    :ok = ChatPostOffice.create_mailbox 45
+    :ok = ChatPostOffice.send_mail 45, {:add_listener, {0, self}}
+    :ok = ChatPostOffice.broadcast_mail {:msg, {:user_joined_room, "delboy"}}, []
+    receive do
+      m when is_list m ->
+        [{_message_id, {:user_joined_room, "delboy"}} | _] = m
+        assert true
+      _ -> 
+        assert false
+    end
+    :ok = ChatPostOffice.send_mail 45, {:remove_listener, self}
+    assert(true)
+  end
+
+
   test "Validate a nickname" do
     valid_nick = "granddad"
 
@@ -68,6 +85,14 @@ defmodule ChatTutorialTest do
 
     # "D@ve" is invalid
     {:error, :bad_format} = ChatRoom.validate_nick "D@ve", state
-
   end
+
+  test "User Joins Room" do
+    ChatPostOffice.start_link()
+    ChatRoom.start_link()
+    {:ok, _session_id} = ChatRoom.join "delboy", "localhost"
+    # You can't do it again
+    {:error, :not_available} = ChatRoom.join "delboy", "localhost"
+  end
+
 end

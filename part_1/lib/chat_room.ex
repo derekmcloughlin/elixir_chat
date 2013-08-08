@@ -11,20 +11,20 @@ defmodule ChatRoom do
   end
  
   def start_link() do
-    :gen_server.start_link({:local, :chatroom}, ChatRoom, [], [])
+    :gen_server.start_link {:local, :chatroom}, ChatRoom, [], []
   end
 
   def join(nick, host) do
-    :gen_server.call(:chatroom, {:join, {nick, host}}, :infinity)
+    :gen_server.call :chatroom, {:join, {nick, host}}, :infinity
   end
 
-  def handle_call({:join, {nick, host}}, _from, state) when is_list nick do
+  def handle_call({:join, {nick, host}}, _from, state) do
     case validate_nick(nick, state) do
       {:error, reason} -> 
         {:reply, {:error, reason}, state}
       {:ok, valid_nick} ->
         session = get_unique_session state
-        case ChatPostOffice.create_mailbox Session do
+        case ChatPostOffice.create_mailbox session do
           :ok -> 
             ChatPostOffice.broadcast_mail({:msg, {:user_joined_room, valid_nick}}, [session])
             new_client = ClientState.new id: session, nick: valid_nick, host: host, last_action: :erlang.now()
@@ -35,8 +35,12 @@ defmodule ChatRoom do
     end
   end
 
-  defp get_unique_session(state) do
-    "dummy"
+  def get_unique_session(state) do
+    hash = ChatUtil.generate_hash
+    case Enum.filter(state.clients, fn(client_state) -> client_state.id == hash end) do
+      [] -> hash
+      _ -> get_unique_session state
+    end
   end
 
   def validate_nick([], _) do
