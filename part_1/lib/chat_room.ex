@@ -26,6 +26,22 @@ defmodule ChatRoom do
     :gen_server.cast :chatroom, {:chat_message, {session, message}}
   end
 
+  def get_users(session) do
+    :gen_server.call :chatroom, {:get_users, {session}}, :infinity
+  end
+
+  def get_msg_id(session, pid) do
+    :gen_server.cast :chatroom, {:get_msg_id, {session, pid}}
+  end
+
+  def wait(session, message_id, pid) do
+    :gen_server.cast :chatroom, {:wait, {session, message_id, pid}}
+  end
+
+  def wait_finish(session, pid) do
+    :gen_server.cast :chatroom, {:wait_finish, {session, pid}}
+  end
+ 
   def handle_call({:join, {nick, host}}, _from, state) do
     case validate_nick(nick, state) do
       {:error, reason} -> 
@@ -56,8 +72,6 @@ defmodule ChatRoom do
     end
   end
 
-
-
   def handle_cast({:chat_message, {session, message}}, state) do
     case get_session(session, state) do
       {:error, :not_found} -> 
@@ -71,12 +85,55 @@ defmodule ChatRoom do
     end
   end
 
+  def handle_call({:get_users, {session}}, _from, state) do
+    case get_session(session, state) do
+      {:error, :not_found} -> 
+        {:reply, {:error, :not_found}, state}
+      {:ok, client} -> 
+        new_state = update_client(client, state)
+        {:reply, {:ok, Enum.map(state.clients, fn(c) -> c.nick end)}, new_state}
+    end
+  end
+
+  def handle_cast({:get_msg_id, {session, pid}}, state) do
+    case get_session(session, state) do
+      {:error, :not_found} -> 
+        pid <- {:error, :bad_session}
+        {:noreply, state}
+      {:ok, client} -> 
+        new_state = update_client(client, state)
+        ChatPostOffice.send_mail session, {:get_msg_id, pid} 
+        {:noreply, new_state}
+    end
+  end
+
+  def handle_cast({:wait, {session, message_id, pid}}, state) do
+    case get_session(session, state) do
+      {:error, :not_found} -> 
+        pid <- {:error, :bad_session}
+        {:noreply, state}
+      {:ok, client} -> 
+        new_state = update_client(client, state)
+        ChatPostOffice.send_mail session, {:add_listener, {message_id, pid}}
+        {:noreply, new_state}
+    end
+  end
+
+  def handle_cast({:wait_finish, {session, pid}}, state) do
+    case get_session(session, state) do
+      {:error, :not_found} -> 
+        {:noreply, state}
+      {:ok, _client} -> 
+        ChatPostOffice.send_mail session, {:remove_listener, pid}
+        {:noreply, state}
+    end
+  end
+
   def update_client(client, state) do
     new_client = client.update_last_action(fn(_old_last_action) -> :erlang.now() end)
     others = Enum.filter(state.clients, fn(c) -> c.id != client.id end)
     State.new clients: [new_client | others]
   end
-
 
   def get_unique_session(state) do
     hash = ChatUtil.generate_hash

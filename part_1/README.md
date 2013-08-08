@@ -591,6 +591,183 @@ test "Send a chat message" do
 end
 ```
 
+More Chat Room Functionality
+----------------------------
+
+There are still a few more APIs to implement for the chat room, especially for the 
+web client.
+
+* Getting a list of users in the room
+* Letting the web client get the current message id
+* Allowing the web client to wait for a message
+* Letting the web client finish this waiting
+* Detecting idle users and disconnecting them.
+
+The user list is straightforward enough:
+
+```elixir
+def get_users(session) do
+  :gen_server.call :chatroom, {:get_users, {session}}, :infinity
+end
+
+def handle_call({:get_users, {session}}, _from, state) do
+  case get_session(session, state) do
+    {:error, :not_found} -> 
+      {:reply, {:error, :not_found}, state}
+    {:ok, client} -> 
+      new_state = update_client(client, state)
+      {:reply, {:ok, Enum.map(state.clients, fn(c) -> c.nick end)}, new_state}
+  end
+end
+
+test "Get the list of users" do
+  ChatPostOffice.start_link()
+  ChatRoom.start_link()
+  {:ok, _session_id} = ChatRoom.join "dave", "localhost"
+  {:ok, session_id} = ChatRoom.join "trigger", "localhost"
+  case ChatRoom.get_users session_id do
+    {:ok, m} when is_list m -> 
+      assert length(m) == 2
+      assert m |> Enum.sort |> Enum.at(0) == "dave"
+      assert m |> Enum.sort |> Enum.at(1) == "trigger"
+    _ ->
+      assert false
+  end
+end
+```
+
+Getting the current message ID for the user's mailbox is similar:
+
+```elixir
+def get_msg_id(session, pid) do
+  :gen_server.cast :chatroom, {:get_msg_id, {session, pid}}
+end
+
+def handle_cast({:get_msg_id, {session, pid}}, state) do
+  case get_session(session, state) do
+    {:error, :not_found} -> 
+      pid <- {:error, :bad_session}
+      {:noreply, state}
+    {:ok, client} -> 
+      new_state = update_client(client, state)
+      ChatPostOffice.send_mail session, {:get_msg_id, pid} 
+      {:noreply, new_state}
+  end
+end
+
+test "Get the message ID for the current user" do
+  ChatPostOffice.start_link()
+  ChatRoom.start_link()
+  {:ok, session_id} = ChatRoom.join "albert", "localhost"
+  :ok = ChatRoom.get_msg_id 'badsession', self 
+  receive do
+    {:error, :bad_session} ->
+      assert true
+  end
+  :ok = ChatRoom.get_msg_id session_id, self 
+  receive do
+    {:cur_msg_id, x} when is_integer x ->
+      assert true
+  end
+end
+```
+
+Waiting for a chat message involves having a process able to receive a chat 
+message for a particular user.
+
+```elixir
+def wait(session, message_id, pid) do
+  :gen_server.cast :chatroom, {:wait, {session, message_id, pid}}
+end
+
+def handle_cast({:wait, {session, message_id, pid}}, state) do
+  case get_session(session, state) do
+    {:error, :not_found} -> 
+      pid <- {:error, :bad_session}
+      {:noreply, state}
+    {:ok, client} -> 
+      new_state = update_client(client, state)
+      ChatPostOffice.send_mail session, {:add_listener, {message_id, pid}}
+      {:noreply, new_state}
+  end
+end
+
+test "Wait for a chat message" do
+  ChatPostOffice.start_link()
+  ChatRoom.start_link()
+  {:ok, boice_session_id} = ChatRoom.join "boice", "localhost"
+  {:ok, denzil_session_id} = ChatRoom.join "denzil", "localhost"
+  ChatRoom.chat_message boice_session_id, "How's it going Denzil?"
+  ChatRoom.wait denzil_session_id, 0, self
+  receive do
+    m when is_list m -> 
+      [{_message_id, {:chat_msg, {"boice", "How's it going Denzil?"}}} | _] = m
+      assert true
+    _ ->
+      assert false
+  end
+  ChatRoom.chat_message denzil_session_id, "Not bad. Have you seen Delboy?"
+  ChatRoom.wait boice_session_id, 0, self
+  receive do
+    m when is_list m -> 
+      [{_message_id, {:chat_msg, {"denzil", "Not bad. Have you seen Delboy?"}}} | _] = m
+      assert true
+    _ ->
+      assert false
+  end
+end  
+```
+
+Because of the way the web client works, we need to let the chat room know we're not
+waiting any more once we get a message. This effectively removes the client from the
+listeners in the mailbox.
+
+```elixir
+def wait_finish(session, pid) do
+  :gen_server.cast :chatroom, {:wait, {session, pid}}
+end
+
+def handle_cast({:wait_finish, {session, pid}}, state) do
+  case get_session(session, state) do
+    {:error, :not_found} -> 
+      {:noreply, state}
+    {:ok, _client} -> 
+      ChatPostOffice.send_mail session, {:remove_listener, pid}
+      {:noreply, state}
+  end
+end
+
+test "Stop waiting for a chat message" do
+  ChatPostOffice.start_link()
+  ChatRoom.start_link()
+  {:ok, raquel_session_id} = ChatRoom.join "raquel", "localhost"
+  {:ok, cassandra_session_id} = ChatRoom.join "cassandra", "localhost"
+  ChatRoom.chat_message raquel_session_id, "Where is Rodney that plonker?"
+  ChatRoom.wait cassandra_session_id, 0, self
+  receive do
+    m when is_list m -> 
+      [{_message_id, {:chat_msg, {"raquel", "Where is Rodney that plonker?"}}} | _] = m
+      assert true
+    _ ->
+      assert false
+  end
+  ChatRoom.wait_finish cassandra_session_id, self
+  # See if there are any more messages - timeout after 1 second
+  receive do
+    _ -> 
+      assert false
+    after 1000 ->
+      assert true
+  end
+end
+```
+
+Note that in the test after the call to `wait_finish` we see if there are any more
+messages and timeout after 1000 milliseconds, which should be good enough.
+
+A Note on Unit Test Setup and Teardown
+--------------------------------------
+
 
 
 

@@ -119,4 +119,84 @@ defmodule ChatTutorialTest do
     end
   end
 
+  test "Get the list of users" do
+    ChatPostOffice.start_link()
+    ChatRoom.start_link()
+    {:ok, _session_id} = ChatRoom.join "dave", "localhost"
+    {:ok, session_id} = ChatRoom.join "trigger", "localhost"
+    case ChatRoom.get_users session_id do
+      {:ok, m} when is_list m -> 
+        assert length(m) == 2
+        assert m |> Enum.sort |> Enum.at(0) == "dave"
+        assert m |> Enum.sort |> Enum.at(1) == "trigger"
+      _ ->
+        assert false
+    end
+  end
+
+  test "Get the message ID for the current user" do
+    ChatPostOffice.start_link()
+    ChatRoom.start_link()
+    {:ok, session_id} = ChatRoom.join "albert", "localhost"
+    :ok = ChatRoom.get_msg_id 'badsession', self 
+    receive do
+      {:error, :bad_session} ->
+        assert true
+    end
+    :ok = ChatRoom.get_msg_id session_id, self 
+    receive do
+      {:cur_msg_id, x} when is_integer x ->
+        assert true
+    end
+  end
+
+  test "Wait for a chat message" do
+    ChatPostOffice.start_link()
+    ChatRoom.start_link()
+    {:ok, boice_session_id} = ChatRoom.join "boice", "localhost"
+    {:ok, denzil_session_id} = ChatRoom.join "denzil", "localhost"
+    ChatRoom.chat_message boice_session_id, "How's it going Denzil?"
+    ChatRoom.wait denzil_session_id, 0, self
+    receive do
+      m when is_list m -> 
+        [{_message_id, {:chat_msg, {"boice", "How's it going Denzil?"}}} | _] = m
+        assert true
+      _ ->
+        assert false
+    end
+    ChatRoom.chat_message denzil_session_id, "Not bad. Have you seen Delboy?"
+    ChatRoom.wait boice_session_id, 0, self
+    receive do
+      m when is_list m -> 
+        [{_message_id, {:chat_msg, {"denzil", "Not bad. Have you seen Delboy?"}}} | _] = m
+        assert true
+      _ ->
+        assert false
+    end
+  end
+
+  test "Stop waiting for a chat message" do
+    ChatPostOffice.start_link()
+    ChatRoom.start_link()
+    {:ok, raquel_session_id} = ChatRoom.join "raquel", "localhost"
+    {:ok, cassandra_session_id} = ChatRoom.join "cassandra", "localhost"
+    ChatRoom.chat_message raquel_session_id, "Where is Rodney that plonker?"
+    ChatRoom.wait cassandra_session_id, 0, self
+    receive do
+      m when is_list m -> 
+        [{_message_id, {:chat_msg, {"raquel", "Where is Rodney that plonker?"}}} | _] = m
+        assert true
+      _ ->
+        assert false
+    end
+    ChatRoom.wait_finish cassandra_session_id, self
+    # See if there are any more messages - timeout after 1 second
+    receive do
+      _ -> 
+        assert false
+      after 1000 ->
+        assert true
+    end
+  end
+
 end
