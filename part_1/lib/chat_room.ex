@@ -22,6 +22,10 @@ defmodule ChatRoom do
     :gen_server.cast :chatroom, {:leave, {session, reason}}
   end
 
+  def chat_message(session, message) do
+    :gen_server.cast :chatroom, {:chat_message, {session, message}}
+  end
+
   def handle_call({:join, {nick, host}}, _from, state) do
     case validate_nick(nick, state) do
       {:error, reason} -> 
@@ -51,6 +55,28 @@ defmodule ChatRoom do
         {:noreply, State.new clients: other_clients}
     end
   end
+
+
+
+  def handle_cast({:chat_message, {session, message}}, state) do
+    case get_session(session, state) do
+      {:error, :not_found} -> 
+        {:noreply, state}
+      {:ok, client} ->
+        clean_message =  message |> String.slice 0, 256 
+        ChatPostOffice.broadcast_mail {:msg, {:chat_msg, {client.nick, clean_message}}}, [client.id]
+        ChatPostOffice.send_mail client.id, {:msg, {:sent_chat_msg, {client.nick, clean_message}}}
+        new_state = update_client(client, state)
+        {:noreply, new_state}
+    end
+  end
+
+  def update_client(client, state) do
+    new_client = client.update_last_action(fn(_old_last_action) -> :erlang.now() end)
+    others = Enum.filter(state.clients, fn(c) -> c.id != client.id end)
+    State.new clients: [new_client | others]
+  end
+
 
   def get_unique_session(state) do
     hash = ChatUtil.generate_hash

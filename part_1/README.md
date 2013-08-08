@@ -544,5 +544,53 @@ test "User Leaves Room" do
 end
 ```
 
+Sending a chat message is similar:
+
+
+```elixir
+def chat_message(session, message) do
+  :gen_server.cast :chatroom, {:chat_message, {session, message}}
+end
+
+def handle_cast({:chat_message, {session, message}}, state) do
+  case get_session(session, state) do
+    {:error, :not_found} -> 
+      {:noreply, state}
+    {:ok, client} ->
+      clean_message =  message |> String.slice 0, 256 
+      ChatPostOffice.broadcast_mail {:msg, {:chat_msg, {client.nick, clean_message}}}, [client.id]
+      ChatPostOffice.send_mail client.id, {:msg, {:sent_chat_msg, {client.nick, clean_message}}}
+      new_state = update_client(client, state)
+      {:noreply, new_state}
+  end
+end
+
+def update_client(client, state) do
+  new_client = client.update_last_action(fn(_old_last_action) -> :erlang.now() end)
+  others = Enum.filter(state.clients, fn(c) -> c.id != client.id end)
+  State.new clients: [new_client | others]
+end
+```
+
+The test is as follows:
+
+```elixir
+test "Send a chat message" do
+  ChatPostOffice.start_link()
+  ChatRoom.start_link()
+  {:ok, session_id} = ChatRoom.join "granddad", "localhost"
+  ChatRoom.chat_message session_id, "How's it going Delboy?"
+  :ok = ChatPostOffice.send_mail session_id, {:add_listener, {0, self}}
+  receive do
+    m when is_list m -> 
+      [{_message_id, {:sent_chat_msg, {"granddad", "How's it going Delboy?"}}} | _] = m
+      assert true
+    _ ->
+      assert false
+  end
+end
+```
+
+
 
 

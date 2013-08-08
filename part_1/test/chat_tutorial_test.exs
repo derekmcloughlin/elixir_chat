@@ -104,4 +104,19 @@ defmodule ChatTutorialTest do
     :ok = ChatRoom.leave "invalid session", "Didn't like the language"
   end
 
+  test "Send a chat message" do
+    ChatPostOffice.start_link()
+    ChatRoom.start_link()
+    {:ok, session_id} = ChatRoom.join "granddad", "localhost"
+    ChatRoom.chat_message session_id, "How's it going Delboy?"
+    :ok = ChatPostOffice.send_mail session_id, {:add_listener, {0, self}}
+    receive do
+      m when is_list m -> 
+        [{_message_id, {:sent_chat_msg, {"granddad", "How's it going Delboy?"}}} | _] = m
+        assert true
+      _ ->
+        assert false
+    end
+  end
+
 end
