@@ -765,9 +765,108 @@ end
 Note that in the test after the call to `wait_finish` we see if there are any more
 messages and timeout after 1000 milliseconds, which should be good enough.
 
+The last bit is to find any idle clients and disconnect them.
+
+```elixir
+def find_idle_clients() do
+  :gen_server.cast :chatroom, {:find_idle_clients, {}}
+end
+
+def handle_cast(:find_idle_clients, state) do
+  {:noreply, state}
+end
+
+def handle_cast({:find_idle_clients, {}}, state) do
+  Enum.each(state.clients,
+    fn(client) ->
+      last_action = :calendar.now_to_datetime client.last_action
+      now = :erlang.now |> :calendar.now_to_datetime
+      idle_seconds =  :calendar.datetime_to_gregorian_seconds(now) - :calendar.datetime_to_gregorian_seconds(last_action)
+      case idle_seconds > max_idle_time do
+        true -> 
+          #IO.puts "User timed out: #{client.nick}, secs: #{idle_seconds}"
+          :timer.apply_after(0, __MODULE__, :leave, [client.id, "timeout"])
+        _ -> :noop
+      end
+    end)
+  :timer.apply_after(check_idle_time, __MODULE__, :find_idle_clients, [])
+  {:noreply, state}
+end
+```
+
+This is called in the ChatRoom `init` function:
+
+```elixir
+def max_idle_time, do: 2    # seconds
+def check_idle_time, do: 1000 # Milliseconds
+
+def init(_args) do
+  :erlang.process_flag(:trap_exit, true)
+  :timer.apply_after(check_idle_time, ChatRoom, :find_idle_clients, [])
+  {:ok, State.new}
+end
+```
+
+Note for testing I've set the max idle time to only 2 seconds. It might be better
+to have the max time configurable - i.e. create a new API to set the time and 
+store it in the state.
+
 A Note on Unit Test Setup and Teardown
 --------------------------------------
 
+I have a major problem in my tests which I've skirted till now. You might notice
+that whenever I add someone to a room I'm using unique names.
+
+Sometimes all the tests pass. Running `mix test` again and then some fail.
+
+The reason is to do with the way the tests that use any of the gen servers are
+written. I've been sloppy and put an explicit `start_link` in each test. 
+However, if test A does this and then test B does it, the gen_servers are
+already started. What we really want to do is to start and stop the servers
+for each test.
+
+The way this is done in ExUnit is to use the `setup` and `teardown` callbacks:
+
+```elixir
+setup do
+  ChatPostOffice.start_link()
+  ChatRoom.start_link()
+  :ok
+end
+
+teardown _meta do
+  ChatPostOffice.stop()
+  ChatRoom.stop()
+  :ok
+end
+```
+
+We also need to handle stop messages in each gen_server:
+
+```elixir
+# In ChatRoom
+def stop() do
+  :gen_server.cast :chatroom, {:stop, {}}
+end
+
+def handle_cast({:stop, {}}, state) do
+  {:stop, :normal, state}
+end
+
+# In ChatPostOffice
+def stop() do
+  :gen_server.cast :postoffice, {:stop, {}}
+end
+
+def handle_cast({:stop, {}}, state) do
+  {:stop, :normal, state}
+end
+```
+
+And we need to remove all explicit `start_link` calls in the tests.
 
 
+What's Next
+-----------
 
+That's it for part 1. In part 2 we'll add the web client.

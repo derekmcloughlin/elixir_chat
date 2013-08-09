@@ -1,5 +1,21 @@
+import :timer, only: [ sleep: 1 ]
+
 defmodule ChatTutorialTest do
   use ExUnit.Case
+
+
+  setup do
+    ChatPostOffice.start_link()
+    ChatRoom.start_link()
+    :ok
+  end
+
+  teardown _meta do
+    ChatPostOffice.stop()
+    ChatRoom.stop()
+    :ok
+  end
+
 
   test "Sending a message to a mailbox" do
     p = spawn ChatMailbox, :start, [0] 
@@ -15,7 +31,6 @@ defmodule ChatTutorialTest do
   end
 
   test "Create a mailbox" do
-    ChatPostOffice.start_link()
     :ok = ChatPostOffice.create_mailbox 42
     # Try creating it again
     {:error, :already_exists} = ChatPostOffice.create_mailbox(42)
@@ -23,7 +38,6 @@ defmodule ChatTutorialTest do
   end
 
   test "Delete a mailbox" do
-    ChatPostOffice.start_link()
     :ok = ChatPostOffice.create_mailbox 43
     # Delete it
     ChatPostOffice.delete_mailbox 43
@@ -33,7 +47,6 @@ defmodule ChatTutorialTest do
   end
 
   test "Send some mail" do
-    ChatPostOffice.start_link()
     :ok = ChatPostOffice.create_mailbox 44
     :ok = ChatPostOffice.send_mail 44, {:add_listener, {0, self}}
     :ok = ChatPostOffice.send_mail 44, {:msg, "Hello world"}
@@ -49,7 +62,6 @@ defmodule ChatTutorialTest do
   end
 
   test "Broadcast some mail" do
-    ChatPostOffice.start_link()
     :ok = ChatPostOffice.create_mailbox 45
     :ok = ChatPostOffice.send_mail 45, {:add_listener, {0, self}}
     :ok = ChatPostOffice.broadcast_mail {:msg, {:user_joined_room, "delboy"}}, []
@@ -86,16 +98,12 @@ defmodule ChatTutorialTest do
   end
 
   test "User Joins Room" do
-    ChatPostOffice.start_link()
-    ChatRoom.start_link()
     {:ok, _session_id} = ChatRoom.join "delboy", "localhost"
     # You can't do it again
     {:error, :not_available} = ChatRoom.join "delboy", "localhost"
   end
 
   test "User Leaves Room" do
-    ChatPostOffice.start_link()
-    ChatRoom.start_link()
     {:ok, session_id} = ChatRoom.join "rodney", "localhost"
     :ok = ChatRoom.leave session_id, "Didn't like the language"
     # Try it again with the same session id
@@ -105,8 +113,6 @@ defmodule ChatTutorialTest do
   end
 
   test "Send a chat message" do
-    ChatPostOffice.start_link()
-    ChatRoom.start_link()
     {:ok, session_id} = ChatRoom.join "granddad", "localhost"
     ChatRoom.chat_message session_id, "How's it going Delboy?"
     :ok = ChatPostOffice.send_mail session_id, {:add_listener, {0, self}}
@@ -120,8 +126,6 @@ defmodule ChatTutorialTest do
   end
 
   test "Get the list of users" do
-    ChatPostOffice.start_link()
-    ChatRoom.start_link()
     {:ok, _session_id} = ChatRoom.join "dave", "localhost"
     {:ok, session_id} = ChatRoom.join "trigger", "localhost"
     case ChatRoom.get_users session_id do
@@ -135,8 +139,6 @@ defmodule ChatTutorialTest do
   end
 
   test "Get the message ID for the current user" do
-    ChatPostOffice.start_link()
-    ChatRoom.start_link()
     {:ok, session_id} = ChatRoom.join "albert", "localhost"
     :ok = ChatRoom.get_msg_id 'badsession', self 
     receive do
@@ -151,8 +153,6 @@ defmodule ChatTutorialTest do
   end
 
   test "Wait for a chat message" do
-    ChatPostOffice.start_link()
-    ChatRoom.start_link()
     {:ok, boice_session_id} = ChatRoom.join "boice", "localhost"
     {:ok, denzil_session_id} = ChatRoom.join "denzil", "localhost"
     ChatRoom.chat_message boice_session_id, "How's it going Denzil?"
@@ -176,8 +176,6 @@ defmodule ChatTutorialTest do
   end
 
   test "Stop waiting for a chat message" do
-    ChatPostOffice.start_link()
-    ChatRoom.start_link()
     {:ok, raquel_session_id} = ChatRoom.join "raquel", "localhost"
     {:ok, cassandra_session_id} = ChatRoom.join "cassandra", "localhost"
     ChatRoom.chat_message raquel_session_id, "Where is Rodney that plonker?"
@@ -197,6 +195,21 @@ defmodule ChatTutorialTest do
       after 1000 ->
         assert true
     end
+  end
+
+  test "Find Idle Clients" do
+    {:ok, _micky_session_id} = ChatRoom.join "micky", "localhost"
+    sleep 4000
+    # Micky should have timed out after 2 seconds
+    {:ok, angela_session_id} = ChatRoom.join "angela", "localhost"
+    case ChatRoom.get_users angela_session_id do
+      {:ok, m} when is_list m -> 
+        assert length(m) == 1
+        assert m |> Enum.sort |> Enum.at(0) == "angela"
+      _ ->
+        assert false
+    end
+
   end
 
 end

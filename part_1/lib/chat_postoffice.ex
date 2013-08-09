@@ -12,7 +12,11 @@ defmodule ChatPostOffice do
     :gen_server.start_link {:local, :postoffice}, ChatPostOffice, [], []
   end
 
-  def create_mailbox(id) do
+  def stop() do
+    :gen_server.cast :postoffice, {:stop, {}}
+  end
+
+   def create_mailbox(id) do
     :gen_server.call :postoffice, {:create_mailbox, id}
   end
 
@@ -37,7 +41,11 @@ defmodule ChatPostOffice do
     end
   end
 
-  def handle_call({:create_mailbox, id}, _from, state) do
+  def handle_cast({:stop, {}}, state) do
+    {:stop, :normal, state}
+  end
+ 
+   def handle_call({:create_mailbox, id}, _from, state) do
     case get_mailbox(id, state) do
       {:ok, _} -> 
         {:reply, {:error, :already_exists}, state}

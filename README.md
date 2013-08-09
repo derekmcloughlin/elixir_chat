@@ -15,6 +15,7 @@ on Cowboy and Web Sockets [Youtube video](http://www.youtube.com/watch?v=yYlYZy1
 
 This tutorial is split into different parts to make it easier to follow along, rather than using git tags or branches.
 
-* Part 1 - The Original Comet Chat Server
-* Part 2 - Adding Multiple Rooms
-* Part 3 - Using Web Sockets
+* Part 1 - The Original Chat Server Backend
+* Part 2 - Adding the Web Client
+* Part 3 - Adding Multiple Rooms
+* Part 4 - Using Web Sockets

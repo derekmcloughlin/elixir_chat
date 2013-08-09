@@ -2,16 +2,25 @@ defmodule ChatRoom do
 
   use GenServer.Behaviour
 
+  def max_idle_time, do: 2    # seconds
+  def check_idle_time, do: 1000 # Milliseconds
+
   defrecord ClientState, id: 0, nick: nil, host: nil, last_action: nil
 
   defrecord State, clients: []
 
   def init(_args) do
+	:erlang.process_flag(:trap_exit, true)
+    :timer.apply_after(check_idle_time, ChatRoom, :find_idle_clients, [])
     {:ok, State.new}
   end
  
   def start_link() do
     :gen_server.start_link {:local, :chatroom}, ChatRoom, [], []
+  end
+
+  def stop() do
+    :gen_server.cast :chatroom, {:stop, {}}
   end
 
   def join(nick, host) do
@@ -40,6 +49,14 @@ defmodule ChatRoom do
 
   def wait_finish(session, pid) do
     :gen_server.cast :chatroom, {:wait_finish, {session, pid}}
+  end
+
+  def find_idle_clients() do
+    :gen_server.cast :chatroom, {:find_idle_clients, {}}
+  end
+
+  def handle_cast({:stop, {}}, state) do
+    {:stop, :normal, state}
   end
  
   def handle_call({:join, {nick, host}}, _from, state) do
@@ -127,6 +144,23 @@ defmodule ChatRoom do
         ChatPostOffice.send_mail session, {:remove_listener, pid}
         {:noreply, state}
     end
+  end
+
+  def handle_cast({:find_idle_clients, {}}, state) do
+    Enum.each(state.clients,
+      fn(client) ->
+        last_action = :calendar.now_to_datetime client.last_action
+        now = :erlang.now |> :calendar.now_to_datetime
+        idle_seconds =  :calendar.datetime_to_gregorian_seconds(now) - :calendar.datetime_to_gregorian_seconds(last_action)
+        case idle_seconds > max_idle_time do
+          true -> 
+            #IO.puts "User timed out: #{client.nick}, secs: #{idle_seconds}"
+            :timer.apply_after(0, __MODULE__, :leave, [client.id, "timeout"])
+          _ -> :noop
+        end
+      end)
+    :timer.apply_after(check_idle_time, __MODULE__, :find_idle_clients, [])
+    {:noreply, state}
   end
 
   def update_client(client, state) do
