@@ -1,9 +1,0 @@
-{application,part_1,
-             [{registered,[]},
-              {description,"part_1"},
-              {vsn,"0.0.1"},
-              {modules,['Elixir.ChatMailbox.Message',
-                        'Elixir.ChatMailbox.State','Elixir.ChatMailbox',
-                        'Elixir.ChatPostOffice.State','Elixir.ChatPostOffice',
-                        'Elixir.ChatTutorial']},
-              {applications,[kernel,stdlib,elixir]}]}.
