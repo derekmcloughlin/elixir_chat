@@ -1,4 +1,4 @@
-# ChatTutorial - Part 1
+# ChatTutorial - Part 2
 
 This is part 2 of my Elixir Chat Server based on Chris Moos's
 [Building an Erlang Chat Server with Comet](http://www.chrismoos.com/2009/09/28/building-an-erlang-chat-server-with-comet-part-1)
