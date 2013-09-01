@@ -45,17 +45,6 @@ defmodule ChatPostOffice do
     {:stop, :normal, state}
   end
  
-   def handle_call({:create_mailbox, id}, _from, state) do
-    case get_mailbox(id, state) do
-      {:ok, _} -> 
-        {:reply, {:error, :already_exists}, state}
-      {:error, :notfound} ->
-        pid = spawn_link(ChatMailbox, :start, [id])
-        new_mailbox = {id, pid}
-        {:reply, :ok, State.new mailboxes: [new_mailbox | state.mailboxes]}
-    end
-  end
-
   def handle_cast({:delete_mailbox, mailbox_id}, state) do
     #state{mailboxes=MBoxes} = State) ->
     new_boxes = Enum.filter(state.mailboxes, fn({id, pid}) ->
@@ -86,6 +75,17 @@ defmodule ChatPostOffice do
       |> Enum.filter(fn({id, _}) -> Enum.member?(except, id) == false end)
       |> Enum.each(fn({_, pid}) -> pid <- message end)
     {:noreply, state}
+  end
+
+  def handle_call({:create_mailbox, id}, _from, state) do
+    case get_mailbox(id, state) do
+      {:ok, _} -> 
+        {:reply, {:error, :already_exists}, state}
+      {:error, :notfound} ->
+        pid = spawn_link(ChatMailbox, :start, [id])
+        new_mailbox = {id, pid}
+        {:reply, :ok, State.new mailboxes: [new_mailbox | state.mailboxes]}
+    end
   end
 
 end

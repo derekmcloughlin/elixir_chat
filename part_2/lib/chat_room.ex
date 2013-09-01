@@ -59,23 +59,6 @@ defmodule ChatRoom do
     {:stop, :normal, state}
   end
  
-  def handle_call({:join, {nick, host}}, _from, state) do
-    case validate_nick(nick, state) do
-      {:error, reason} -> 
-        {:reply, {:error, reason}, state}
-      {:ok, valid_nick} ->
-        session = get_unique_session state
-        case ChatPostOffice.create_mailbox session do
-          :ok -> 
-            ChatPostOffice.broadcast_mail({:msg, {:user_joined_room, valid_nick}}, [session])
-            new_client = ClientState.new id: session, nick: valid_nick, host: host, last_action: :erlang.now()
-            {:reply, {:ok, session}, State.new clients: [new_client | state.clients]}
-          {:error, _} -> 
-            {:reply, {:error, :not_available}, state}
-        end
-    end
-  end
-
   def handle_cast({:leave, {session, reason}}, state) do
     case get_session(session, state) do
       {:error, :not_found} -> 
@@ -99,16 +82,6 @@ defmodule ChatRoom do
         ChatPostOffice.send_mail client.id, {:msg, {:sent_chat_msg, {client.nick, clean_message}}}
         new_state = update_client(client, state)
         {:noreply, new_state}
-    end
-  end
-
-  def handle_call({:get_users, {session}}, _from, state) do
-    case get_session(session, state) do
-      {:error, :not_found} -> 
-        {:reply, {:error, :not_found}, state}
-      {:ok, client} -> 
-        new_state = update_client(client, state)
-        {:reply, {:ok, Enum.map(state.clients, fn(c) -> c.nick end)}, new_state}
     end
   end
 
@@ -161,6 +134,33 @@ defmodule ChatRoom do
       end)
     :timer.apply_after(check_idle_time, __MODULE__, :find_idle_clients, [])
     {:noreply, state}
+  end
+
+  def handle_call({:join, {nick, host}}, _from, state) do
+    case validate_nick(nick, state) do
+      {:error, reason} -> 
+        {:reply, {:error, reason}, state}
+      {:ok, valid_nick} ->
+        session = get_unique_session state
+        case ChatPostOffice.create_mailbox session do
+          :ok -> 
+            ChatPostOffice.broadcast_mail({:msg, {:user_joined_room, valid_nick}}, [session])
+            new_client = ClientState.new id: session, nick: valid_nick, host: host, last_action: :erlang.now()
+            {:reply, {:ok, session}, State.new clients: [new_client | state.clients]}
+          {:error, _} -> 
+            {:reply, {:error, :not_available}, state}
+        end
+    end
+  end
+
+  def handle_call({:get_users, {session}}, _from, state) do
+    case get_session(session, state) do
+      {:error, :not_found} -> 
+        {:reply, {:error, :not_found}, state}
+      {:ok, client} -> 
+        new_state = update_client(client, state)
+        {:reply, {:ok, Enum.map(state.clients, fn(c) -> c.nick end)}, new_state}
+    end
   end
 
   def update_client(client, state) do
