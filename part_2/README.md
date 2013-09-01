@@ -4,9 +4,10 @@ This is part 2 of my Elixir Chat Server based on Chris Moos's
 [Building an Erlang Chat Server with Comet](http://www.chrismoos.com/2009/09/28/building-an-erlang-chat-server-with-comet-part-1)
 the source of which can be found on [Github](https://github.com/chrismoos/erl_chat_tutorial).
 
-In [Part 1] we ported the original Erlang code to Elixir. In this section
+In [Part 1](https://github.com/derekmcloughlin/elixir_chat/tree/master/part_2)
+we ported the original Erlang code to Elixir. In this section
 we'll add OTP items such as applications and supervisors, and then add
-the web server and client using Mochiweb.
+the web server and client using [Mochiweb](https://github.com/mochi/mochiweb).
 
 OTP Applications
 ----------------
@@ -130,4 +131,85 @@ iex(3)>
 
 Note that we don't have to start the post office or chat room servers explicitly.
 
+Side Note
+=========
+
+There were warnings from the compiler output about handle_cast and handle_call 
+being previously defined. The reason for this is that functions with the same 
+name and arity must be grouped together, whereas I've added them as I came 
+across them. They're fixed now.
+
+MochiWeb
+--------
+
+To use MochiWeb we need to add it as a dependency of our application. This is
+done in the `deps` section of the `mix.exs` file:
+
+~~~elixir
+defp deps do
+[
+  { :mochiweb, "2.7.0", git: "https://github.com/mochi/mochiweb" }
+]
+end
+~~~
+
+Running `mix deps.get` downloads this version and compiles it.
+
+With that in place we can add a module to handle web requests. Here's a simple start:
+
+~~~elixir
+defmodule ChatWeb do
+
+  def start_link() do
+    :mochiweb_http.start([{:port, 8000}, {:loop, {__MODULE__, :loop}}])
+  end
+
+  def loop(req) do
+    case req.get(:version) do
+      version when version >= {1, 0} ->
+        path = to_string req.get(:path)
+        IO.puts "Path = #{path}\n"
+        handle_request req, path
+      _ -> :ok
+    end
+  end
+
+  def handle_request(req, "/") do
+    html_ok req, "<p>Getting index.html</p>"
+  end
+
+  def handle_request(req, "/test") do
+    html_ok req, "<p>TESTING</p>"
+  end
+
+  def handle_request(req, path) do
+    html_ok req, "<p>Got request for '#{path}'</p>"
+  end
+  defp html_ok(req, data) do
+    req.ok({"text/html;charset=UTF-8", data})
+  end
+
+end
+~~~
+
+We need to modify the supervisor module to start the web server:
+
+~~~elixir
+def init([]) do
+  child_processes = [
+    worker(ChatRoom, []), 
+    worker(ChatPostOffice, []),
+    worker(ChatWeb, [])] 
+  supervise child_processes, strategy: :one_for_one
+end 
+~~~
+
+Running the server lets us browse to http://localhost:8000. We'll see the web request
+in the browser output.
+
+~~~
+NOTE: I had to use to_string when getting the path, otherwise the pattern matching
+in handle_request wouldn't work. I think this is because strings in Elixir are UTF-8
+while the ones in Erlang aren't.
+~~~
 

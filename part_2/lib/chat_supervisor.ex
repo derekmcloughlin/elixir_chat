@@ -6,7 +6,10 @@ defmodule ChatSupervisor do
   end
 
   def init([]) do
-    child_processes = [worker(ChatRoom, []), worker(ChatPostOffice, [])] 
+    child_processes = [
+      worker(ChatRoom, []), 
+      worker(ChatPostOffice, []),
+      worker(ChatWeb, [])] 
     supervise child_processes, strategy: :one_for_one
   end 
 end
