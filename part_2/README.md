@@ -219,13 +219,20 @@ Using Erlydtl
 The original code uses [Erlydtl](https://github.com/evanmiller/erlydtl) as the
 templating language.
 
+I couldn't get Erlydtl as a git dependency in the project, so I ended up 
+manually cloning the Erlydtl repository and adding this to the deps section:
+
+~~~elixir
+  { :erlydtl, path: "deps/erlydtl"},
+~~~
+
 There's a helper function in the ChatUtil module to load templates
 
 ~~~elixir
 def get_template(name, vars) do
   :ok = :erlydtl.compile('templates/#{name}.html', binary_to_atom(name))
-	{:ok, tpl} = apply(binary_to_atom(name), :render, [vars])
-	String.from_char_list!(tpl)
+  {:ok, tpl} = apply(binary_to_atom(name), :render, [vars])
+  String.from_char_list!(tpl)
 end
 ~~~
 
