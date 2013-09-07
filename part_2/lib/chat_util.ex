@@ -18,8 +18,7 @@ defmodule ChatUtil do
   end
 
   def get_template(name, vars) do
-    {:ok, x} = :erlydtl.compile("templates/#{name}.html", binary_to_atom(name))
-    IO.puts "x = #{x}"
+    :ok = :erlydtl.compile('templates/#{name}.html', binary_to_atom(name))
 	{:ok, tpl} = apply(binary_to_atom(name), :render, [vars])
 	String.from_char_list!(tpl)
   end

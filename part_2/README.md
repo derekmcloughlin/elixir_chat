@@ -208,7 +208,7 @@ Running the server lets us browse to http://localhost:8000. We'll see the web re
 in the browser output.
 
 ~~~
-NOTE: I had to use to_string when getting the path, otherwise the pattern matching
+NOTE: I had to use `to_string` when getting the path, otherwise the pattern matching
 in handle_request wouldn't work. I think this is because strings in Elixir are UTF-8
 while the ones in Erlang aren't.
 ~~~
@@ -219,7 +219,30 @@ Using Erlydtl
 The original code uses [Erlydtl](https://github.com/evanmiller/erlydtl) as the
 templating language.
 
+There's a helper function in the ChatUtil module to load templates
+
+~~~elixir
+def get_template(name, vars) do
+  :ok = :erlydtl.compile('templates/#{name}.html', binary_to_atom(name))
+	{:ok, tpl} = apply(binary_to_atom(name), :render, [vars])
+	String.from_char_list!(tpl)
+end
+~~~
+
+Note the use of the single-quoted string when passing the template name to the
+`:erlydtl.compile` function. Also note that `name` is an Elixir string, not an Erlang
+one, so we need to use `binary_to_atom` instead of `list_to_atom` as was in the original
+Erlang code.
 
 
+The root URL can be coded now as:
+
+~~~elixir
+def handle_request(req, "/") do
+  html_ok req, ChatUtil.get_template("index", [])
+end
+~~~
+
+Running this code you should now see the main login page.
 
 

@@ -23,7 +23,7 @@ defmodule ChatWeb do
   end
 
   def handle_request(req, "/") do
-    html_ok req, "<p>Getting index.html</p>"
+    html_ok req, ChatUtil.get_template("index", [])
   end
 
   def handle_request(req, path) do
