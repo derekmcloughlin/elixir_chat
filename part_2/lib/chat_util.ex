@@ -13,7 +13,15 @@ defmodule ChatUtil do
   end
 
   def bin_to_hexstr(bin) do
-    List.flatten(lc x inlist :erlang.binary_to_list(bin), do: :io_lib.format("~2.16.0B", [x]))
+    List.flatten(lc x inlist :erlang.binary_to_list(bin), 
+      do: :io_lib.format("~2.16.0B", [x]))
+  end
+
+  def get_template(name, vars) do
+    {:ok, x} = :erlydtl.compile("templates/#{name}.html", binary_to_atom(name))
+    IO.puts "x = #{x}"
+	{:ok, tpl} = apply(binary_to_atom(name), :render, [vars])
+	String.from_char_list!(tpl)
   end
 
   #def unicode_clean(str) do

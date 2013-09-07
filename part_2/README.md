@@ -132,7 +132,7 @@ iex(3)>
 Note that we don't have to start the post office or chat room servers explicitly.
 
 Side Note
-=========
+---------
 
 There were warnings from the compiler output about handle_cast and handle_call 
 being previously defined. The reason for this is that functions with the same 
@@ -212,4 +212,14 @@ NOTE: I had to use to_string when getting the path, otherwise the pattern matchi
 in handle_request wouldn't work. I think this is because strings in Elixir are UTF-8
 while the ones in Erlang aren't.
 ~~~
+
+Using Erlydtl
+-------------
+
+The original code uses [Erlydtl](https://github.com/evanmiller/erlydtl) as the
+templating language.
+
+
+
+
 

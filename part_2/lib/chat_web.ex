@@ -18,6 +18,10 @@ defmodule ChatWeb do
     html_ok req, "<p>TESTING</p>"
   end
 
+  def handle_request(req, "/chat") do
+    html_ok req, ChatUtil.get_template("chat", [])
+  end
+
   def handle_request(req, "/") do
     html_ok req, "<p>Getting index.html</p>"
   end

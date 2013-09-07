@@ -21,6 +21,7 @@ defmodule ChatTutorial.Mixfile do
   defp deps do
     [
       { :mochiweb, "2.7.0", git: "https://github.com/mochi/mochiweb"},
+      { :erlydtl, path: "deps/erlydtl"},
     ]
   end
 end
