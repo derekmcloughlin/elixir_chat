@@ -2,7 +2,7 @@ defmodule ChatRoom do
 
   use GenServer.Behaviour
 
-  def max_idle_time, do: 2    # seconds
+  def max_idle_time, do: 1200    # seconds
   def check_idle_time, do: 1000 # Milliseconds
 
   defrecord ClientState, id: 0, nick: nil, host: nil, last_action: nil
@@ -127,7 +127,7 @@ defmodule ChatRoom do
         idle_seconds =  :calendar.datetime_to_gregorian_seconds(now) - :calendar.datetime_to_gregorian_seconds(last_action)
         case idle_seconds > max_idle_time do
           true -> 
-            #IO.puts "User timed out: #{client.nick}, secs: #{idle_seconds}"
+            IO.puts "User timed out: #{client.nick}, secs: #{idle_seconds}"
             :timer.apply_after(0, __MODULE__, :leave, [client.id, "timeout"])
           _ -> :noop
         end
@@ -137,6 +137,7 @@ defmodule ChatRoom do
   end
 
   def handle_call({:join, {nick, host}}, _from, state) do
+    IO.puts "#{nick} trying to join room from host #{host}"
     case validate_nick(nick, state) do
       {:error, reason} -> 
         {:reply, {:error, reason}, state}

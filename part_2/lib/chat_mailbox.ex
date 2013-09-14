@@ -19,7 +19,6 @@ defmodule ChatMailbox do
         loop(new_state)
 
       {:get_state} ->
-        IO.puts "State: #{inspect(state)}"
         loop(state)
 
       {:get_msg_id, pid} ->
@@ -58,9 +57,7 @@ defmodule ChatMailbox do
   end
 
   def start(id) do
-    #:proc_lib.hibernate(__ENV__.module, :loop, [State.new id: id])
-    #spawn(__ENV__.module, :loop, [State.new id: id])
-    loop(State.new id: id)
+    :proc_lib.hibernate(__MODULE__, :loop, [State.new id: id])
   end
 
 end

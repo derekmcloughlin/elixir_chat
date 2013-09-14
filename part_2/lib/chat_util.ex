@@ -2,6 +2,7 @@ defmodule ChatUtil do
   def generate_hash() do
     :crypto.hash(:sha, generate_string(16))
     |> bin_to_hexstr
+    |> to_string
   end
 
   def generate_string(size) do
@@ -19,9 +20,22 @@ defmodule ChatUtil do
 
   def get_template(name, vars) do
     :ok = :erlydtl.compile('templates/#{name}.html', binary_to_atom(name))
-	{:ok, tpl} = apply(binary_to_atom(name), :render, [vars])
-	String.from_char_list!(tpl)
+    {:ok, tpl} = apply(binary_to_atom(name), :render, [vars])
+    String.from_char_list!(tpl)
   end
+
+  def get_parameter(n, [{k,v}|_]) when k == n do 
+    to_string v
+  end
+
+  def get_parameter(n, [_|t]) do
+    get_parameter(n, t)
+  end
+
+  def get_parameter(_, _) do
+    []
+  end
+
 
   #def unicode_clean(str) do
     #case :rfc4627.unicode_decode(:erlang.list_to_binary(str)) do

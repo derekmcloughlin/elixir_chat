@@ -252,4 +252,157 @@ end
 
 Running this code you should now see the main login page.
 
+Getting Request Parameters
+--------------------------
+
+The web server has to handle post requests and their data. There's a utility function
+in ChatUtil that gets a parameter from the post for us:
+
+~~~elixir
+def get_parameter(n, [{k,v}|_]) when k == n do 
+  v
+end
+
+def get_parameter(n, [_|t]) do
+  get_parameter(n, t)
+end
+
+def get_parameter(_, _) do
+  []
+end
+~~~
+
+As an example we could have this in the login handler:
+
+~~~elixir
+def handle_request(req, "/login/") do
+  post = req.parse_post()
+  nick = ChatUtil.get_parameter('nick', post)
+  html_ok req, "<p>Your nickname is #{nick}"
+end
+~~~
+
+NOTE: You need to use the single-quoted string `'nick'` instead of a double-quoted
+one `"nick"`. I've also used to_string to return the result as an Elixir string.
+
+With that in place, the login handler now looks like:
+
+~~~elixir
+def handle_request(req, "/login/") do
+  post = req.parse_post()
+  case ChatRoom.join(ChatUtil.get_parameter('nick', post), req.get(:peer)) do
+    {:ok, sess_id} -> 
+      sess_cookie = :mochiweb_cookies.cookie('chat_sess', sess_id, [{:path, "/"}])
+      req.respond({302, [sess_cookie, {'Location', '/chat'}], <<>>})
+    {:error, :too_many_conns} -> 
+      html_ok(req, ChatUtil.get_template("index", [{:error, "Your host has too many connections to the chat server."}]))
+    {:error, :not_available} -> 
+      html_ok(req, ChatUtil.get_template("index", [{:error, "The nickname is not available."}]))
+    _ ->
+  html_ok(req, ChatUtil.get_template("index", [{:error, "The nickname must be alphanumeric and not blank."}]))
+  end
+end
+~~~
+
+You should be able to login now. You won't see the list of users - that's next. In order
+to do this I'll add the `rfc4627` library for JSON encoding into the deps file:
+
+~~~elixir
+  { :rfc4627_jsonrpc, "0.01", git: "https://github.com/tonyg/erlang-rfc4627"},
+~~~ 
+
+### Strings and things ###
+However, there is a slight problem. Strings in Elixir are UTF-8 binary strings in Erlang.
+
+~~~elixir
+"Hello"     # Elixir string or Erlang binary string
+'Hello'     # Erlang string or list of numbers
+~~~
+
+I've been a bit lax in mixing the two and it's going to cause problems. One area is
+in the use of a string for the session id.
+
+~~~elixir
+def generate_hash() do
+  :crypto.hash(:sha, generate_string(16))
+  |> bin_to_hexstr
+end
+~~~
+
+This produces an Erlang string, but the `get_parameter` function above returns
+an Elixir string. Best to be consistent and use Elxir strings whenever we
+can and Erlang strings when we have to communicate with Erlang functions.
+
+~~~elixir
+def generate_hash() do
+  :crypto.hash(:sha, generate_string(16))
+  |> bin_to_hexstr
+  |> to_string
+end
+~~~
+
+After Login
+-----------
+
+After logging in the server redirects to the `/chat` path:
+
+~~~elixir
+def handle_request(req, "/chat") do
+  html_ok req, ChatUtil.get_template("chat", [])
+end
+~~~
+
+The chat template loads up `client.js`. The client connects to the chat service
+via the `/chat/start` path.  This involves getting the current message id 
+and waiting for a response and sending it back to the client. 
+
+~~~elixir
+def handle_request(req, "/chat/start/") do
+  ChatRoom.get_msg_id(get_session(req), self())
+  wait_msg_id(req)
+end
+
+def wait_msg_id(req) do
+  receive do
+    {:cur_msg_id, msg_id} -> 
+      json_respond(json_client_ok(msg_id), req)
+    x -> 
+      bad_session(req)
+  end
+end
+~~~
+
+Once the client gets this, it asks for the list of online users:
+
+~~~elixir
+def handle_request(req, "/chat/online/") do
+  case ChatRoom.get_users(get_session(req)) do
+    {:ok, users} -> 
+      json_respond(json_client_ok(users), req)
+    _ -> 
+      bad_session(req)
+  end
+end
+~~~
+
+The JSON helper functions are:
+
+~~~elixir
+def json_respond(msg, req) do
+  req.ok({"text/json", [], msg})
+end
+
+def bad_session(req) do
+  json_respond(json_client_error(<<"bad_session">>), req)
+end
+
+def json_client_ok(msg) do
+  List.flatten(:rfc4627.encode({:obj, [{"status", <<"ok">>}, {:response, msg}]}))
+end
+
+def json_client_error(msg) do
+  Lists.flatten(:rfc4627.encode({:obj, [{"status", <<"error">>}, {:response, msg}]}))
+end
+~~~
+
 
