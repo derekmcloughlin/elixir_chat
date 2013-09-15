@@ -366,7 +366,7 @@ def wait_msg_id(req) do
   receive do
     {:cur_msg_id, msg_id} -> 
       json_respond(json_client_ok(msg_id), req)
-    x -> 
+    _ -> 
       bad_session(req)
   end
 end
