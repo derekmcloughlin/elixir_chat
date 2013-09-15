@@ -490,6 +490,10 @@ def handle_request(req, "/chat/send_msg/") do
 end
 ~~~
 
+What's Next
+-----------
+
+Now that we have a working chat server the next step is to add multiple rooms.
 
 
 
