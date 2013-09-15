@@ -137,7 +137,6 @@ defmodule ChatRoom do
   end
 
   def handle_call({:join, {nick, host}}, _from, state) do
-    IO.puts "#{nick} trying to join room from host #{host}"
     case validate_nick(nick, state) do
       {:error, reason} -> 
         {:reply, {:error, reason}, state}

@@ -36,6 +36,13 @@ defmodule ChatUtil do
     []
   end
 
+  def get_parameter_int(name, x) do
+	case String.to_integer(get_parameter(name, x)) do
+      {:error, _} -> 0
+      {y, _} -> y
+	end
+  end
+
 
   #def unicode_clean(str) do
     #case :rfc4627.unicode_decode(:erlang.list_to_binary(str)) do

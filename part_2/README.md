@@ -405,4 +405,92 @@ def json_client_error(msg) do
 end
 ~~~
 
+Waiting for and Sending Chat Messages
+-------------------------------------
+
+The client issues a request to `/chat/wait/` to wait for messages.
+
+~~~elixir
+def handle_request(req, "/chat/wait/") do
+  msg_id = ChatUtil.get_parameter_int('msg_id', req.parse_qs())
+  ChatRoom.wait(get_session(req), msg_id, self())
+  :timer.apply_after(comet_timeout, __MODULE__, :timeout_wait, [self()])
+  :proc_lib.hibernate(__MODULE__, :wait, [req])
+end
+~~~
+
+The `wait` function simply enters a receive block to get the message.
+
+~~~elixir
+def wait(req) do 
+  receive do
+    :timeout -> 
+      json_respond(json_client_ok(<<"reconnect">>),Req)
+    items when is_list(items) -> 
+      msgs = List.flatten(Enum.map(items, fn(x) -> format_message(x) end))
+      json_respond(json_client_ok(msgs), req)
+    _ -> 
+      bad_session(req)
+  end
+  ChatRoom.wait_finish(get_session(req), self())
+end
+~~~
+
+Timeouts are handled after the period specified by `comet_timeout` where the
+`timeout_wait` function is called:
+
+~~~elixir
+def timeout_wait(pid) do
+  pid <- :timeout    
+end
+~~~
+
+Various formatting functions are:
+
+~~~elixir
+def format_message({id, {type, data}}) do
+  {:obj, [{"id", id}, 
+          {"t", :erlang.list_to_binary(atom_to_list(type))}, 
+          {"d", format_data(type, data)}]}
+end
+
+def format_message(_) do
+  []
+end
+
+def format_data(:admin_logged_out, nick) do
+  nick
+end
+def format_data(:admin_logged_in, nick) do
+  nick
+end
+def format_data(:user_left_room, {nick, reason}) do
+  {:obj, [{"nick", nick}, {"reason", reason}]}
+end
+def format_data(:user_joined_room, nick) do
+  nick
+end
+def format_data(:system_msg, msg) do
+  msg
+end
+def format_data(x, {nick, msg}) when (x == :chat_msg) or (x == :sent_chat_msg) do
+  {:obj, [{"nick", nick}, {"msg", msg}]}
+end
+def format_data(_, _) do
+  []
+end
+~~~
+
+Finally, to send a chat message, the client uses the `/chat/send_msg/` request:
+
+~~~elixir
+def handle_request(req, "/chat/send_msg/") do
+  ChatRoom.chat_message(get_session(req), ChatUtil.get_parameter('msg', req.parse_post()))
+  json_respond(json_client_ok(<<"">>), req)
+end
+~~~
+
+
+
+
 
