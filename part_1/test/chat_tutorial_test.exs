@@ -5,26 +5,30 @@ defmodule ChatTutorialTest do
 
 
   setup do
+    IO.write "Starting servers..."
     ChatPostOffice.start_link()
     ChatRoom.start_link()
+    IO.puts "... started"
     :ok
   end
 
   teardown _meta do
+    IO.write "Stopping servers..."
     ChatPostOffice.stop()
     ChatRoom.stop()
+    IO.puts "... stopped"
     :ok
   end
 
 
   test "Sending a message to a mailbox" do
     p = spawn ChatMailbox, :start, [0] 
-    p <- {:add_listener, {0, self}}
-    p <- {:msg, "Hello world"}
+    send p, {:add_listener, {0, self}}
+    send p, {:msg, "Hello world"}
     receive do
       m when is_list m ->
         [{_id, message} | _ ] = m
-        assert(message == "Hello world")
+        assert message == "Hello world"
       _ -> 
         assert false
     end
@@ -33,8 +37,8 @@ defmodule ChatTutorialTest do
   test "Create a mailbox" do
     :ok = ChatPostOffice.create_mailbox 42
     # Try creating it again
-    {:error, :already_exists} = ChatPostOffice.create_mailbox(42)
-    assert(true)
+    {:error, status } = ChatPostOffice.create_mailbox(42)
+    assert status == :already_exists
   end
 
   test "Delete a mailbox" do
@@ -43,7 +47,6 @@ defmodule ChatTutorialTest do
     ChatPostOffice.delete_mailbox 43
     # Delete it again - doesn't cause an error
     ChatPostOffice.delete_mailbox 43
-    assert(true)
   end
 
   test "Send some mail" do
@@ -53,12 +56,11 @@ defmodule ChatTutorialTest do
     receive do
       m when is_list m ->
         [{_id, message} | _ ] = m
-        assert(message == "Hello world")
+        assert message == "Hello world"
       _ -> 
         assert false
     end
     :ok = ChatPostOffice.send_mail 44, {:remove_listener, self}
-    assert(true)
   end
 
   test "Broadcast some mail" do
@@ -68,21 +70,19 @@ defmodule ChatTutorialTest do
     receive do
       m when is_list m ->
         [{_message_id, {:user_joined_room, "delboy"}} | _] = m
-        assert true
       _ -> 
         assert false
     end
     :ok = ChatPostOffice.send_mail 45, {:remove_listener, self}
-    assert(true)
   end
 
 
   test "Validate a nickname" do
-    delboy = ChatRoom.ClientState.new nick: "delboy"
-    rodney = ChatRoom.ClientState.new nick: "rodney"
+    delboy = %ChatRoom.ClientState{nick: "delboy"}
+    rodney = %ChatRoom.ClientState{nick: "rodney"}
 
     clients = [delboy, rodney]
-    state = ChatRoom.State.new clients: clients
+    state = %ChatRoom.State{clients: clients}
 
     # "grandad" is OK
     {:ok, "granddad"} = ChatRoom.validate_nick "granddad", state
@@ -119,7 +119,6 @@ defmodule ChatTutorialTest do
     receive do
       m when is_list m -> 
         [{_message_id, {:sent_chat_msg, {"granddad", "How's it going Delboy?"}}} | _] = m
-        assert true
       _ ->
         assert false
     end
@@ -143,12 +142,12 @@ defmodule ChatTutorialTest do
     :ok = ChatRoom.get_msg_id 'badsession', self 
     receive do
       {:error, :bad_session} ->
-        assert true
+        true
     end
     :ok = ChatRoom.get_msg_id session_id, self 
     receive do
       {:cur_msg_id, x} when is_integer x ->
-        assert true
+        true
     end
   end
 
@@ -160,7 +159,6 @@ defmodule ChatTutorialTest do
     receive do
       m when is_list m -> 
         [{_message_id, {:chat_msg, {"boice", "How's it going Denzil?"}}} | _] = m
-        assert true
       _ ->
         assert false
     end
@@ -169,7 +167,6 @@ defmodule ChatTutorialTest do
     receive do
       m when is_list m -> 
         [{_message_id, {:chat_msg, {"denzil", "Not bad. Have you seen Delboy?"}}} | _] = m
-        assert true
       _ ->
         assert false
     end
@@ -183,7 +180,6 @@ defmodule ChatTutorialTest do
     receive do
       m when is_list m -> 
         [{_message_id, {:chat_msg, {"raquel", "Where is Rodney that plonker?"}}} | _] = m
-        assert true
       _ ->
         assert false
     end
@@ -193,23 +189,24 @@ defmodule ChatTutorialTest do
       _ -> 
         assert false
       after 1000 ->
-        assert true
+        true
     end
   end
 
-  test "Find Idle Clients" do
-    {:ok, _micky_session_id} = ChatRoom.join "micky", "localhost"
-    sleep 4000
-    # Micky should have timed out after 2 seconds
-    {:ok, angela_session_id} = ChatRoom.join "angela", "localhost"
-    case ChatRoom.get_users angela_session_id do
-      {:ok, m} when is_list m -> 
-        assert length(m) == 1
-        assert m |> Enum.sort |> Enum.at(0) == "angela"
-      _ ->
-        assert false
-    end
 
-  end
+  # This is commented out for the moment
+  #test "Find Idle Clients" do
+    #{:ok, _micky_session_id} = ChatRoom.join "micky", "localhost"
+    #sleep 8000
+    ## Micky should have timed out after 2 seconds
+    #{:ok, angela_session_id} = ChatRoom.join "angela", "localhost"
+    #case ChatRoom.get_users angela_session_id do
+      #{:ok, m} when is_list m -> 
+        #assert length(m) == 1
+        #assert m |> Enum.sort |> Enum.at(0) == "angela"
+      #_ ->
+        #assert false
+    #end
+  #end
 
 end

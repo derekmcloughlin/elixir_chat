@@ -2,10 +2,12 @@ defmodule ChatPostOffice do
 
   use GenServer.Behaviour
 
-  defrecord State, mailboxes: []
+  defmodule State do
+    defstruct mailboxes: []
+  end
 
   def init(_args) do
-    {:ok, State.new}
+    {:ok, %State{}}
   end
 
   def start_link() do
@@ -16,7 +18,7 @@ defmodule ChatPostOffice do
     :gen_server.cast :postoffice, {:stop, {}}
   end
 
-   def create_mailbox(id) do
+  def create_mailbox(id) do
     :gen_server.call :postoffice, {:create_mailbox, id}
   end
 
@@ -41,40 +43,39 @@ defmodule ChatPostOffice do
     end
   end
 
-  def handle_cast({:stop, {}}, state) do
-    {:stop, :normal, state}
-  end
- 
-   def handle_call({:create_mailbox, id}, _from, state) do
+  def handle_call({:create_mailbox, id}, _from, state) do
     case get_mailbox(id, state) do
       {:ok, _} -> 
         {:reply, {:error, :already_exists}, state}
       {:error, :notfound} ->
         pid = spawn_link(ChatMailbox, :start, [id])
         new_mailbox = {id, pid}
-        {:reply, :ok, State.new mailboxes: [new_mailbox | state.mailboxes]}
+        {:reply, :ok, %State{state | mailboxes: [new_mailbox | state.mailboxes] } } 
     end
   end
 
+  def handle_cast({:stop, {}}, state) do
+    {:stop, :normal, state}
+  end
+
   def handle_cast({:delete_mailbox, mailbox_id}, state) do
-    #state{mailboxes=MBoxes} = State) ->
     new_boxes = Enum.filter(state.mailboxes, fn({id, pid}) ->
       case id != mailbox_id do
         false -> 
           # tell the mailbox process to quit
-          pid <- :quit
+          send pid, :quit
           false
         _ -> 
           true
       end
     end)
-    {:noreply, State.new mailboxes: new_boxes}
+    {:noreply, %State{ state | mailboxes: new_boxes}}
   end
 
   def handle_cast({:send_mail, {id, message}}, state) do
     case get_mailbox(id, state) do
       {:ok, {_id, pid}} -> 
-        pid <- message
+        send pid, message
       _ -> 
         :ok
     end
@@ -84,7 +85,7 @@ defmodule ChatPostOffice do
   def handle_cast({:broadcast_mail, {message, except}}, state) when is_list except do
     state.mailboxes 
       |> Enum.filter(fn({id, _}) -> Enum.member?(except, id) == false end)
-      |> Enum.each(fn({_, pid}) -> pid <- message end)
+      |> Enum.each(fn({_, pid}) -> send pid, message end)
     {:noreply, state}
   end
 

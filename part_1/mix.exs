@@ -4,7 +4,7 @@ defmodule ChatTutorial.Mixfile do
   def project do
     [ app: :part_1,
       version: "0.0.1",
-      elixir: "~> 0.10.1-dev",
+      elixir: "~> 0.13.3",
       deps: deps ]
   end
 

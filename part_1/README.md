@@ -37,16 +37,20 @@ The MailBox
 
 Each connected user has a mailbox that stores messages and notifies listeners of new messages.
 
-Messages are stored using a record:
+Messages are stored using a struct within a module:
 
 ```elixir
-defrecord Message, id: 0, data: nil
+defmodule Message do
+  defstruct id: 0, data: nil
+end
 ```
 
-The state of the mailbox is defined by another record:
+The state of the mailbox is defined by another struct:
 
 ```elixir
-defrecord State, id: 0, cur_id: 0, listeners: [], messages: []
+defmodule State do
+  defstruct id: 0, cur_id: 0, listeners: [], messages: []
+end
 ```
 
 `listeners` is a list of `{message_id, process_id}` pairs. A listener is an Erlang
@@ -56,28 +60,34 @@ The mailbox is a plain old Erlang process (not a gen_server).
 
 ```elixir
 def loop(state) do
+
   receive do
+    
     {:add_listener, listener = {_msg_id, _pid}} ->
-      new_state = state.update_listeners(fn(old_listeners) -> [listener | old_listeners] end)
+      new_state = %State{state | listeners: [listener | state.listeners]}
       new_state = notify_listeners(new_state)
       loop(new_state)
+
     {:remove_listener, pid} ->
       new_listeners = Enum.filter(state.listeners, fn({_id, p}) -> p != pid end)
-      new_state = state.update_listeners(fn(_old_listeners) -> new_listeners end)
+      new_state = %State{ state | listeners: new_listeners }
       loop(new_state)
+
     {:get_state} ->
       IO.puts "State: #{inspect(state)}"
       loop(state)
+
     {:get_msg_id, pid} ->
-      pid <- {:cur_msg_id, state.cur_id}
+      send pid, {:cur_msg_id, state.cur_id}
       loop(state)
+
     {:msg, data} ->
-      msg = Message.new id: state.cur_id, data: data
-      new_state = state.update_messages(fn(old_messages) -> [msg | old_messages] end)
-      new_state = new_state.update_cur_id(fn(old_cur_id) -> old_cur_id + 1 end)
+      msg = %Message{ id: state.cur_id, data: data}
+      new_state = %State { state | messages: [msg | state.messages], cur_id: state.cur_id + 1 }
       new_state = notify_listeners(new_state)
       loop(new_state)
   end
+  
 end
 ```
 
@@ -101,12 +111,12 @@ def notify_listeners(state) do
                   true # no messages were found for this listener, keep it in the list
                 m -> 
                   messages_to_send = Enum.map(m, fn(msg) -> {msg.id, msg.data} end) 
-                  pid <- messages_to_send
+                  send pid, messages_to_send
                   false # remove it
             end
       end
     end)
-  state.update_listeners(fn(_old_listeners) -> new_listeners end)
+  %State{ state | listeners: new_listeners}
 end
 ```
 
@@ -133,14 +143,14 @@ We can do some ad-hoc manual tests of the Mailbox:
 ~/proj/elixir/elixir_chat/part_1(master)$ iex -S mix
 iex(1)> p = spawn(ChatMailbox, :start, [1])
 #PID<0.51.0>
-iex(2)> p <- {:get_state}
+iex(2)> send p, {:get_state}
 {:get_state}
-State: ChatMailbox.State[id: 1, cur_id: 0, listeners: [], messages: []]
-iex(3)> p <- {:add_listener, {0, self}}
+State: %ChatMailbox.State{id: 1, cur_id: 0, listeners: [], messages: []}
+iex(3)> send p, {:add_listener, {0, self}}
 {:add_listener, {0, #PID<0.26.0>}}
-iex(4)> p <- {:get_state}
+iex(4)> send p, {:get_state}
 {:get_state}
-State: ChatMailbox.State[id: 1, cur_id: 0, listeners: [{0, #PID<0.26.0>}], messages: []]
+State: %ChatMailbox.State{id: 1, cur_id: 0, listeners: [{0, #PID<0.26.0>}], messages: []}
 iex(5)>
 ```
 
@@ -149,12 +159,12 @@ However, use can also add some unit tests. In the file `chat_tutorial_test.exs`:
 ```elixir
   test "Sending a message to a mailbox" do
     p = spawn(ChatMailbox, :start, [0])
-    p <- {:add_listener, {0, self}}
-    p <- {:msg, "Hello world"}
+    send p, {:add_listener, {0, self}}
+    send p, {:msg, "Hello world"}
     receive do
       m when is_list(m) ->
         [{id, message} | _ ] = m
-        assert(message == "Hello world")
+        assert message == "Hello world"
       _ -> 
         assert(false)
     end
@@ -176,12 +186,13 @@ defmodule ChatPostOffice do
 
   use GenServer.Behaviour
 
-  defrecord State, mailboxes: []
-
-  def init(_args) do
-    {:ok, State.new}
+  defmodule State do
+    defstruct mailboxes: []
   end
 
+  def init(_args) do
+    {:ok, %State{}}
+  end
   ...
 ```
 
@@ -215,12 +226,12 @@ We handle the call for the `create_mailbox` API thus:
 ```elixir
 def handle_call({:create_mailbox, id}, _from, state) do
   case get_mailbox(id, state) do
-      {:ok, _} -> 
-        {:reply, {:error, :already_exists}, state}
-      {:error, :notfound} ->
-        pid = spawn_link(ChatMailbox, :start, [id])
-        new_mailbox = {id, pid}
-        {:reply, :ok, State.new mailboxes: [new_mailbox | state.mailboxes]}
+    {:ok, _} -> 
+      {:reply, {:error, :already_exists}, state}
+    {:error, :notfound} ->
+      pid = spawn_link(ChatMailbox, :start, [id])
+      new_mailbox = {id, pid}
+      {:reply, :ok, %State{state | mailboxes: [new_mailbox | state.mailboxes] } } 
   end
 end
 ```
@@ -236,8 +247,8 @@ test "Create a mailbox" do
   ChatPostOffice.start_link()
   :ok = ChatPostOffice.create_mailbox(42)
   # Try creating it again
-  {:error, :already_exists} = ChatPostOffice.create_mailbox(42)
-  assert(true)
+  {:error, status } = ChatPostOffice.create_mailbox(42)
+  assert status == :already_exists
 end
 ```
 
@@ -252,18 +263,17 @@ def delete_mailbox(id) do
 end
 
 def handle_cast({:delete_mailbox, mailbox_id}, state) do
-  #state{mailboxes=MBoxes} = State) ->
   new_boxes = Enum.filter(state.mailboxes, fn({id, pid}) ->
-      case id != mailbox_id do
-          false -> 
-            # tell the mailbox process to quit
-            pid <- :quit
-            false
-          _ -> 
-            true
-      end
+    case id != mailbox_id do
+      false -> 
+        # tell the mailbox process to quit
+        send pid, :quit
+        false
+      _ -> 
+        true
+    end
   end)
-  {:noreply, State.new mailboxes: new_boxes}
+  {:noreply, %State{ state | mailboxes: new_boxes}}
 end
 ```
 
@@ -276,7 +286,6 @@ test "Delete a mailbox" do
   ChatPostOffice.delete_mailbox 43
   # Delete it again - doesn't cause an error
   ChatPostOffice.delete_mailbox 43
-  assert(true)
 end
 ```
 
@@ -315,12 +324,11 @@ test "Send some mail" do
   receive do
     m when is_list m ->
       [{id, message} | _ ] = m
-      assert(message == "Hello world")
+      assert message == "Hello world"
     _ -> 
       assert false
   end
   :ok = ChatPostOffice.send_mail 44, {:remove_listener, self}
-  assert(true)
 end
 ```
 
@@ -377,7 +385,6 @@ test "Broadcast some mail" do
       assert false
   end
   :ok = ChatPostOffice.send_mail 45, {:remove_listener, self}
-  assert(true)
 end
 ```
 
@@ -391,12 +398,16 @@ defmodule ChatRoom do
 
   use GenServer.Behaviour
 
-  defrecord ClientState, id: 0, nick: nil, host: nil, last_action: nil
+  defmodule ClientState do
+    defstruct id: 0, nick: nil, host: nil, last_action: nil
+  end
 
-  defrecord State, clients: []
+  defmodule State do
+    defstruct clients: []
+  end
 
   def init(_args) do
-    {:ok, State.new}
+    {:ok, %State{}}
   end
  
   def start_link() do
@@ -421,7 +432,7 @@ end
 
 defp validate_nick(nick, state) do
   shortened = nick |> String.strip |> String.slice 0, 16 
-  case {Regex.run(%r/^([A-Za-z0-9]+)$/, shortened), Enum.filter(state.clients, fn(client) -> client.nick == shortened end)} do
+  case {Regex.run(~r/^([A-Za-z0-9]+)$/, shortened), Enum.filter(state.clients, fn(client) -> client.nick == shortened end)} do
     {[shortened, shortened], []} -> {:ok, shortened}
     {[shortened, shortened], _} -> {:error, :not_available}
     {nil, []} -> {:error, :bad_format}
@@ -436,11 +447,11 @@ We can test this validation:
 test "Validate a nickname" do
   valid_nick = "granddad"
 
-  delboy = ChatRoom.ClientState.new nick: "delboy"
-  rodney = ChatRoom.ClientState.new nick: "rodney"
+  delboy = %ChatRoom.ClientState{nick: "delboy"}
+  rodney = %ChatRoom.ClientState{nick: "rodney"}
 
   clients = [delboy, rodney]
-  state = ChatRoom.State.new clients: clients
+  state = %ChatRoom.State{clients: clients}
 
   # "grandad" is OK
   {:ok, valid_nick} = ChatRoom.validate_nick valid_nick, state
@@ -464,17 +475,18 @@ def join(nick, host) do
   :gen_server.call(:chatroom, {:join, {nick, host}}, :infinity)
 end
 
-def handle_call({:join, {nick, host}}, _from, state) when is_list nick do
+def handle_call({:join, {nick, host}}, _from, state) do
   case validate_nick(nick, state) do
     {:error, reason} -> 
       {:reply, {:error, reason}, state}
     {:ok, valid_nick} ->
       session = get_unique_session state
-      case ChatPostOffice.create_mailbox Session do
+      case ChatPostOffice.create_mailbox session do
         :ok -> 
           ChatPostOffice.broadcast_mail({:msg, {:user_joined_room, valid_nick}}, [session])
-          new_client = ClientState.new id: session, nick: valid_nick, host: host, last_action: :erlang.now()
-          {:reply, {:ok, session}, State.new clients: [new_client | state.clients]}
+          new_client = %ClientState{ id: session, nick: valid_nick, host: host, last_action: :erlang.now()}
+          # IO.puts "State: #{inspect(state)}"
+          {:reply, {:ok, session}, %State{state | clients: [new_client | state.clients]}}
         {:error, _} -> 
           {:reply, {:error, :not_available}, state}
       end
@@ -523,7 +535,7 @@ def handle_cast({:leave, {session, reason}}, state) do
       clean_reason =  reason |> String.slice 0, 32 
       ChatPostOffice.broadcast_mail {:msg, {:user_left_room, {client.nick, clean_reason}}}, [client.id]
       other_clients = Enum.filter(state.clients, fn(c) -> c.id != client.id end)
-      {:noreply, State.new clients: other_clients}
+      {:noreply, %State{clients: other_clients}}
   end
 end
 ```
@@ -566,10 +578,11 @@ def handle_cast({:chat_message, {session, message}}, state) do
 end
 
 def update_client(client, state) do
-  new_client = client.update_last_action(fn(_old_last_action) -> :erlang.now() end)
+  new_client = %ClientState{ client | last_action: :erlang.now() }
   others = Enum.filter(state.clients, fn(c) -> c.id != client.id end)
-  State.new clients: [new_client | others]
+  %State{ clients: [new_client | others]}
 end
+
 ```
 
 The test is as follows:
@@ -584,7 +597,6 @@ test "Send a chat message" do
   receive do
     m when is_list m -> 
       [{_message_id, {:sent_chat_msg, {"granddad", "How's it going Delboy?"}}} | _] = m
-      assert true
     _ ->
       assert false
   end
@@ -662,12 +674,12 @@ test "Get the message ID for the current user" do
   :ok = ChatRoom.get_msg_id 'badsession', self 
   receive do
     {:error, :bad_session} ->
-      assert true
+      true
   end
   :ok = ChatRoom.get_msg_id session_id, self 
   receive do
     {:cur_msg_id, x} when is_integer x ->
-      assert true
+      true
   end
 end
 ```
@@ -702,7 +714,6 @@ test "Wait for a chat message" do
   receive do
     m when is_list m -> 
       [{_message_id, {:chat_msg, {"boice", "How's it going Denzil?"}}} | _] = m
-      assert true
     _ ->
       assert false
   end
@@ -711,7 +722,6 @@ test "Wait for a chat message" do
   receive do
     m when is_list m -> 
       [{_message_id, {:chat_msg, {"denzil", "Not bad. Have you seen Delboy?"}}} | _] = m
-      assert true
     _ ->
       assert false
   end
@@ -747,7 +757,6 @@ test "Stop waiting for a chat message" do
   receive do
     m when is_list m -> 
       [{_message_id, {:chat_msg, {"raquel", "Where is Rodney that plonker?"}}} | _] = m
-      assert true
     _ ->
       assert false
   end
@@ -757,7 +766,7 @@ test "Stop waiting for a chat message" do
     _ -> 
       assert false
     after 1000 ->
-      assert true
+      true
   end
 end
 ```
