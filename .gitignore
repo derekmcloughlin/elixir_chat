@@ -7,3 +7,6 @@ erl_crash.dump
 .compile.elixir
 part_1/ebin
 part_2/ebin
+_build
+deps
+mix.lock
