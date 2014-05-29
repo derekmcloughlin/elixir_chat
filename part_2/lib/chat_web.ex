@@ -18,7 +18,10 @@ defmodule ChatWeb do
   end
 
   def handle_request(req, "/") do
-    html_ok req, ChatUtil.get_template("index", [])
+    IO.puts "Root"
+    templ = ChatUtil.get_template("index", [])
+    IO.puts "Template = '#{templ}'"
+    html_ok req, templ
   end
 
   def handle_request(req, "/login/") do
@@ -118,7 +121,7 @@ defmodule ChatWeb do
   end
 
   def timeout_wait(pid) do
-    pid <- :timeout    
+    send pid, :timeout    
   end
 
   def format_message({id, {type, data}}) do

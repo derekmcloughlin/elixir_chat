@@ -110,7 +110,6 @@ Now running `iex -S mix` gives:
 
 ~~~elixir
 ~/proj/elixir/elixir_chat/part_2(master)$ iex -S mix
-lib/chat_postoffice.ex:59: clauses for the same def should be grouped together, def handle_cast/2 was previously defined (lib/chat_postoffice.ex:44)
 Compiled lib/chat_postoffice.ex
 Compiled lib/chat_mailbox.ex
 Compiled lib/chat_server.ex
@@ -119,9 +118,6 @@ Compiled lib/chat_tutorial.ex
 Compiled lib/chat_util.ex
 Compiled lib/chat_room.ex
 Generated part_2.app
-Erlang R16B01 (erts-5.10.2) [source-bdf5300] [64-bit] [smp:2:2] [async-threads:10] [hipe] [kernel-poll:false]
-
-Interactive Elixir (0.10.2-dev) - press Ctrl+C to exit (type h() ENTER for help)
 iex(1)> ChatPostOffice.create_mailbox(42)
 :ok
 iex(2)> ChatPostOffice.create_mailbox(42)
@@ -148,7 +144,7 @@ done in the `deps` section of the `mix.exs` file:
 ~~~elixir
 defp deps do
 [
-  { :mochiweb, "2.7.0", git: "https://github.com/mochi/mochiweb" }
+  { :mochiweb, "2.8.1", git: "https://github.com/mochi/mochiweb" }
 ]
 end
 ~~~
@@ -232,7 +228,7 @@ There's a helper function in the ChatUtil module to load templates
 def get_template(name, vars) do
   :ok = :erlydtl.compile('templates/#{name}.html', binary_to_atom(name))
   {:ok, tpl} = apply(binary_to_atom(name), :render, [vars])
-  String.from_char_list!(tpl)
+  Enum.join(List.flatten(tpl), "")
 end
 ~~~
 

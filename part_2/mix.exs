@@ -4,7 +4,7 @@ defmodule ChatTutorial.Mixfile do
   def project do
     [ app: :part_2,
       version: "0.0.1",
-      elixir: "~> 0.10.1-dev",
+      elixir: "~> 0.13.3",
       deps: deps ]
   end
 
@@ -20,9 +20,9 @@ defmodule ChatTutorial.Mixfile do
   # { :foobar, "~> 0.1", git: "https://github.com/elixir-lang/foobar.git" }
   defp deps do
     [
-      { :mochiweb, "2.7.0", git: "https://github.com/mochi/mochiweb"},
-      { :rfc4627_jsonrpc, "0.01", git: "https://github.com/tonyg/erlang-rfc4627"},
-      { :erlydtl, path: "deps/erlydtl"},
+      { :mochiweb, "2.8.1", git: "https://github.com/mochi/mochiweb"},
+      { :rfc4627_jsonrpc, ~r/0.01/, git: "https://github.com/tonyg/erlang-rfc4627"},
+      { :erlydtl, git: "https://github.com/derekmcloughlin/erlydtl"},
     ]
   end
 end

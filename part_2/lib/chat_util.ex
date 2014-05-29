@@ -14,14 +14,13 @@ defmodule ChatUtil do
   end
 
   def bin_to_hexstr(bin) do
-    List.flatten(lc x inlist :erlang.binary_to_list(bin), 
-      do: :io_lib.format("~2.16.0B", [x]))
+    List.flatten(for x <- :erlang.binary_to_list(bin), do: :io_lib.format("~2.16.0B", [x]))
   end
 
   def get_template(name, vars) do
     :ok = :erlydtl.compile('templates/#{name}.html', binary_to_atom(name))
     {:ok, tpl} = apply(binary_to_atom(name), :render, [vars])
-    String.from_char_list!(tpl)
+    Enum.join(List.flatten(tpl), "")
   end
 
   def get_parameter(n, [{k,v}|_]) when k == n do 
